@@ -95,14 +95,95 @@ export default function App() {
     }
   };
 
-  const handleRegister = (role: AuthRole) => {
-    Alert.alert(
-      'Cadastro',
-      isSupabaseConfigured()
-        ? 'Para cadastro, crie uma conta no console do Supabase ou crie a lógica de inserção na tabela "profiles".'
-        : 'Fluxo de cadastro de conta ainda não conectado no protótipo.',
-      [{ text: 'Ok' }]
-    );
+  const handleRegister = async (name: string, email: string, password: string, role: AuthRole) => {
+    if (!isSupabaseConfigured()) {
+      Alert.alert(
+        'Cadastro (Modo Demo)',
+        `Conta criada no modo de demonstração offline!\nNome: ${name}\nCargo: ${role === 'trainer' ? 'Personal' : 'Aluno'}`,
+        [{
+          text: 'Entrar',
+          onPress: () => {
+            if (role === 'trainer') {
+              setScreen({ name: 'TrainerMain', tab: 'dashboard' });
+            } else {
+              setScreen({ name: 'ClientMain', tab: 'dashboard' });
+            }
+          }
+        }]
+      );
+      return;
+    }
+
+    try {
+      // 1. Sign up user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+
+      if (authError) throw authError;
+      const user = authData.user;
+      if (!user) throw new Error('Não foi possível criar a conta.');
+
+      // 2. Insert profile record
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: user.id,
+          name: name,
+          email: email,
+          role: role,
+        });
+
+      if (profileError) throw profileError;
+
+      // 3. Insert role-specific record
+      if (role === 'trainer') {
+        const baseUsername = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '-');
+        const usernameSuffix = Math.floor(100 + Math.random() * 900);
+        const finalUsername = `${baseUsername}-${usernameSuffix}`;
+
+        const { error: trainerError } = await supabase
+          .from('trainers')
+          .insert({
+            profile_id: user.id,
+            username: finalUsername,
+            bio: 'Especialista em saúde e boa forma.',
+            specialties: ['Hipertrofia'],
+            certifications: [],
+          });
+
+        if (trainerError) throw trainerError;
+      } else {
+        const { error: studentError } = await supabase
+          .from('students')
+          .insert({
+            profile_id: user.id,
+            objective: 'Condicionamento',
+            streak: 0,
+            workouts_completed: 0,
+          });
+
+        if (studentError) throw studentError;
+      }
+
+      if (!authData.session) {
+        Alert.alert(
+          'Sucesso!',
+          'Cadastro realizado! Verifique seu e-mail para confirmar a conta antes de fazer o login.',
+          [{ text: 'Ok' }]
+        );
+      } else {
+        Alert.alert(
+          'Sucesso!',
+          'Cadastro realizado e conectado com sucesso!',
+          [{ text: 'Ok' }]
+        );
+      }
+
+    } catch (e: any) {
+      Alert.alert('Erro no Cadastro', e.message);
+    }
   };
 
   const handleForgotPassword = () => {

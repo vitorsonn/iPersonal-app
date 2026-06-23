@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Card } from '../components/native/UI';
 import { MOCK_APPOINTMENTS } from '../mockData';
@@ -15,19 +16,55 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 export default function TrainerAgenda() {
+  const [loading, setLoading] = useState(false);
+  const [appointments, setAppointments] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'calendar' | 'availability'>('calendar');
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date(2026, 5, 22)); // Default to one of mock dates: June 22, 2026
-  const [currentMonth, setCurrentMonth] = useState<Date>(new Date(2026, 5, 1)); // June 2026
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [currentMonth, setCurrentMonth] = useState<Date>(new Date());
 
-  const bookedDates = useMemo(() => [
-    new Date(2026, 5, 16),
-    new Date(2026, 5, 17),
-    new Date(2026, 5, 18),
-    new Date(2026, 5, 22),
-    new Date(2026, 5, 23),
-  ], []);
+  const loadData = async () => {
+    if (!isSupabaseConfigured()) {
+      setAppointments(MOCK_APPOINTMENTS);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          date,
+          time,
+          status,
+          student:student_id (
+            objective,
+            profile:profiles (
+              name
+            )
+          )
+        `)
+        .eq('trainer_id', user.id);
+
+      if (data) {
+        setAppointments(data);
+      }
+    } catch (err) {
+      console.error('Error loading agenda:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   // Helper to determine if dates are the same day
   const isSameDay = (d1: Date, d2: Date) => {
@@ -38,15 +75,60 @@ export default function TrainerAgenda() {
     );
   };
 
-  // Filter appointments for the selected day
-  const selectedDayAppointments = useMemo(() => {
-    return MOCK_APPOINTMENTS.filter(apt => {
-      // For simplicity, match today's date in mock to June 22, 2026, and Tomorrow's to June 23, 2026
-      if (apt.date === 'Hoje' && isSameDay(selectedDate, new Date(2026, 5, 22))) return true;
-      if (apt.date === 'Amanhã' && isSameDay(selectedDate, new Date(2026, 5, 23))) return true;
-      return false;
+  const isAppointmentOnDay = (aptDateStr: string, day: Date) => {
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+
+    if (aptDateStr === 'Hoje') {
+      return isSameDay(today, day);
+    }
+    if (aptDateStr === 'Amanhã') {
+      return isSameDay(tomorrow, day);
+    }
+
+    try {
+      const parsed = new Date(aptDateStr);
+      if (!isNaN(parsed.getTime())) {
+        return isSameDay(parsed, day);
+      }
+    } catch (e) {}
+
+    return false;
+  };
+
+  const bookedDates = useMemo(() => {
+    const dates: Date[] = [];
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+
+    appointments.forEach(apt => {
+      if (apt.date === 'Hoje') {
+        dates.push(today);
+      } else if (apt.date === 'Amanhã') {
+        dates.push(tomorrow);
+      } else {
+        const parsed = new Date(apt.date);
+        if (!isNaN(parsed.getTime())) {
+          dates.push(parsed);
+        }
+      }
     });
-  }, [selectedDate]);
+    return dates;
+  }, [appointments]);
+
+  const selectedDayAppointments = useMemo(() => {
+    return appointments
+      .filter(apt => isAppointmentOnDay(apt.date, selectedDate))
+      .map(apt => ({
+        id: apt.id,
+        time: apt.time,
+        clientName: apt.student?.profile?.name || 'Aluno',
+        objective: apt.student?.objective || 'Treino',
+        status: apt.status,
+      }));
+  }, [appointments, selectedDate]);
 
   // Generate calendar grid days for currentMonth
   const calendarDays = useMemo(() => {
@@ -174,7 +256,7 @@ export default function TrainerAgenda() {
 
                   const isSelected = isSameDay(day, selectedDate);
                   const isBooked = bookedDates.some(bd => isSameDay(bd, day));
-                  const isToday = isSameDay(day, new Date(2026, 5, 22)); // Mock "today"
+                  const isToday = isSameDay(day, new Date());
 
                   return (
                     <Pressable

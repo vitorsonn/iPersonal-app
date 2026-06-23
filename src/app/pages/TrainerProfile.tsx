@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
@@ -6,29 +6,132 @@ import {
   Text,
   TextInput,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Avatar, Card, Input, Label } from '../components/native/UI';
 import { GlowingButton } from '../components/native/AuthUI';
 import { MOCK_TRAINER } from '../mockData';
 import { Camera, LogOut, Save } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 type TrainerProfileProps = {
   onLogout: () => void;
 };
 
 export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
+  const [loading, setLoading] = useState(false);
   const [name, setName] = useState(MOCK_TRAINER.name);
   const [username, setUsername] = useState(MOCK_TRAINER.username);
   const [bio, setBio] = useState(MOCK_TRAINER.bio);
   const [specialties, setSpecialties] = useState(MOCK_TRAINER.specialties.join(', '));
+  const [avatar, setAvatar] = useState(MOCK_TRAINER.avatar);
 
-  const handleSave = () => {
-    Alert.alert('Sucesso', 'Alterações salvas com sucesso!');
+  useEffect(() => {
+    async function loadProfile() {
+      if (!isSupabaseConfigured()) return;
+
+      try {
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // 1. Fetch profile details
+        const { data: profileData, error: profileErr } = await supabase
+          .from('profiles')
+          .select('name, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        if (profileErr) throw profileErr;
+
+        // 2. Fetch trainer details
+        const { data: trainerData, error: trainerErr } = await supabase
+          .from('trainers')
+          .select('username, bio, specialties')
+          .eq('profile_id', user.id)
+          .single();
+
+        if (profileData) {
+          setName(profileData.name || '');
+          if (profileData.avatar_url) {
+            setAvatar(profileData.avatar_url);
+          }
+        }
+
+        if (trainerData) {
+          setUsername(trainerData.username || '');
+          setBio(trainerData.bio || '');
+          if (trainerData.specialties) {
+            setSpecialties(Array.isArray(trainerData.specialties) ? trainerData.specialties.join(', ') : trainerData.specialties);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading trainer profile:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProfile();
+  }, []);
+
+  const handleSave = async () => {
+    if (!isSupabaseConfigured()) {
+      Alert.alert('Sucesso', 'Alterações salvas com sucesso!');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Erro', 'Não foi possível encontrar o usuário autenticado.');
+        return;
+      }
+
+      // 1. Update profiles table
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .update({ name: name })
+        .eq('id', user.id);
+
+      if (profileErr) throw profileErr;
+
+      // Convert specialties from comma separated string to array
+      const specialtiesArray = specialties.split(',').map(s => s.trim()).filter(Boolean);
+
+      // 2. Update trainers table
+      const { error: trainerErr } = await supabase
+        .from('trainers')
+        .update({
+          username: username.toLowerCase().replace(/[^a-z0-9-_]/g, ''),
+          bio: bio,
+          specialties: specialtiesArray,
+        })
+        .eq('profile_id', user.id);
+
+      if (trainerErr) throw trainerErr;
+
+      Alert.alert('Sucesso', 'Alterações salvas com sucesso!');
+    } catch (err: any) {
+      console.error('Error saving trainer profile:', err);
+      Alert.alert('Erro', 'Não foi possível salvar as alterações: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCameraPress = () => {
     Alert.alert('Foto de Perfil', 'Funcionalidade de câmera ainda não conectada.');
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <ActivityIndicator size="large" color="#a3e635" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -45,7 +148,7 @@ export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
         {/* Avatar Profile */}
         <View className="items-center justify-center py-2">
           <View className="relative">
-            <Avatar src={MOCK_TRAINER.avatar} size="xl" className="ring-4 ring-zinc-900" />
+            <Avatar src={avatar} size="xl" className="ring-4 ring-zinc-900" />
             <Pressable
               onPress={handleCameraPress}
               className="absolute bottom-0 right-0 w-8 h-8 bg-lime-400 rounded-full items-center justify-center border-2 border-zinc-950 active:scale-95"

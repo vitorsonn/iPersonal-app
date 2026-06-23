@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,7 +21,7 @@ import {
 type LoginProps = {
   onForgotPassword?: () => void;
   onLogin?: (email: string, password: string, role: AuthRole) => void;
-  onRegister?: (role: AuthRole) => void;
+  onRegister?: (name: string, email: string, password: string, role: AuthRole) => void;
 };
 
 const credentialsByRole: Record<AuthRole, { email: string; password: string }> = {
@@ -36,6 +37,8 @@ const credentialsByRole: Record<AuthRole, { email: string; password: string }> =
 
 export default function Login({ onForgotPassword, onLogin, onRegister }: LoginProps) {
   const [role, setRole] = useState<AuthRole>('trainer');
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState(credentialsByRole.trainer.email);
   const [password, setPassword] = useState(credentialsByRole.trainer.password);
 
@@ -55,8 +58,13 @@ export default function Login({ onForgotPassword, onLogin, onRegister }: LoginPr
 
   const handleRoleChange = (newRole: AuthRole) => {
     setRole(newRole);
-    setEmail(credentialsByRole[newRole].email);
-    setPassword(credentialsByRole[newRole].password);
+    if (!isRegistering) {
+      setEmail(credentialsByRole[newRole].email);
+      setPassword(credentialsByRole[newRole].password);
+    } else {
+      setEmail('');
+      setPassword('');
+    }
   };
 
   function handleLogin() {
@@ -64,7 +72,15 @@ export default function Login({ onForgotPassword, onLogin, onRegister }: LoginPr
   }
 
   function handleRegister() {
-    onRegister?.(role);
+    if (!name.trim()) {
+      Alert.alert('Campo Obrigatório', 'Por favor, preencha o seu nome completo.');
+      return;
+    }
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Campos Obrigatórios', 'Por favor, preencha o e-mail e a senha.');
+      return;
+    }
+    onRegister?.(name, email, password, role);
   }
 
   return (
@@ -84,6 +100,17 @@ export default function Login({ onForgotPassword, onLogin, onRegister }: LoginPr
           <RoleTabs value={role} onChange={handleRoleChange} />
 
           <View key={role} className="gap-6">
+            {isRegistering && (
+              <AuthField
+                autoCapitalize="words"
+                autoComplete="name"
+                value={name}
+                onChangeText={setName}
+                label="Nome Completo"
+                placeholder="Ana Souza"
+              />
+            )}
+
             <AuthField
               autoCapitalize="none"
               autoComplete="email"
@@ -103,18 +130,32 @@ export default function Login({ onForgotPassword, onLogin, onRegister }: LoginPr
               placeholder="password123"
               secureTextEntry
               textContentType="password"
-              action={<TextLink onPress={onForgotPassword}>Esqueceu a senha?</TextLink>}
+              action={!isRegistering && <TextLink onPress={onForgotPassword}>Esqueceu a senha?</TextLink>}
             />
 
-            <GlowingButton className="mt-0" onPress={handleLogin}>
-              {copy.cta}
+            <GlowingButton className="mt-0" onPress={isRegistering ? handleRegister : handleLogin}>
+              {isRegistering ? 'Criar Conta' : copy.cta}
             </GlowingButton>
           </View>
 
           <View className="flex-row flex-wrap items-center justify-center gap-1">
-            <Text className="text-center text-sm text-zinc-400">Não tem uma conta?</Text>
-            <Pressable onPress={handleRegister}>
-              <Text className="text-center text-sm font-medium text-lime-400">{copy.register}</Text>
+            <Text className="text-center text-sm text-zinc-400">
+              {isRegistering ? 'Já tem uma conta?' : 'Não tem uma conta?'}
+            </Text>
+            <Pressable onPress={() => {
+              setIsRegistering(!isRegistering);
+              setName('');
+              if (!isRegistering) {
+                setEmail(credentialsByRole[role].email);
+                setPassword(credentialsByRole[role].password);
+              } else {
+                setEmail('');
+                setPassword('');
+              }
+            }}>
+              <Text className="text-center text-sm font-medium text-lime-400">
+                {isRegistering ? 'Entrar' : copy.register}
+              </Text>
             </Pressable>
           </View>
         </AuthContent>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
@@ -6,6 +6,7 @@ import {
   Text,
   TextInput,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Card } from '../components/native/UI';
 import { MOCK_APPOINTMENTS, MOCK_STUDENTS } from '../mockData';
@@ -18,6 +19,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 const objectiveColors: Record<string, string> = {
   'Hipertrofia': 'bg-blue-500/15 text-blue-400',
@@ -31,22 +33,200 @@ type TrainerAppointmentsProps = {
 };
 
 export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsProps) {
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'students' | 'appointments'>('students');
   const [search, setSearch] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<typeof MOCK_STUDENTS[0] | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
+  const [students, setStudents] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<any[]>([]);
 
-  const filteredStudents = MOCK_STUDENTS.filter(s =>
+  const loadData = async () => {
+    if (!isSupabaseConfigured()) {
+      setStudents(MOCK_STUDENTS);
+      setAppointments(MOCK_APPOINTMENTS);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Fetch appointments
+      const { data: apptsData } = await supabase
+        .from('appointments')
+        .select(`
+          id,
+          date,
+          time,
+          status,
+          student_id,
+          student:student_id (
+            objective,
+            streak,
+            profile:profiles (
+              name,
+              email,
+              created_at
+            )
+          )
+        `)
+        .eq('trainer_id', user.id);
+
+      // 2. Fetch workouts
+      const { data: workoutsData } = await supabase
+        .from('workouts')
+        .select(`
+          student_id,
+          student:student_id (
+            objective,
+            streak,
+            profile:profiles (
+              name,
+              email,
+              created_at
+            )
+          )
+        `)
+        .eq('trainer_id', user.id);
+
+      // Formulate unique student list
+      const studentsMap = new Map<string, any>();
+      const processStudent = (s: any) => {
+        if (s && s.profile && !studentsMap.has(s.profile_id || s.profile.id || s.profile.name)) {
+          const profile = s.profile as any;
+          const studentId = s.profile_id || profile.id;
+          const nameParts = (profile?.name || 'Aluno').split(' ');
+          const initials = nameParts.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+          
+          let since = 'Jun 2026';
+          if (profile?.created_at) {
+            const date = new Date(profile.created_at);
+            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            since = `${months[date.getMonth()]} ${date.getFullYear()}`;
+          }
+
+          studentsMap.set(studentId, {
+            id: studentId,
+            name: profile?.name || 'Aluno',
+            email: profile?.email || '',
+            objective: s.objective || 'Treino',
+            streak: s.streak || 0,
+            initials,
+            nextClass: 'A agendar',
+            since,
+          });
+        }
+      };
+
+      workoutsData?.forEach((w: any) => {
+        const student = w.student;
+        if (student) {
+          const studentWithId = Array.isArray(student)
+            ? { ...student[0], profile_id: w.student_id }
+            : { ...student, profile_id: w.student_id };
+          processStudent(studentWithId);
+        }
+      });
+
+      apptsData?.forEach((a: any) => {
+        const student = a.student;
+        if (student) {
+          const studentWithId = Array.isArray(student)
+            ? { ...student[0], profile_id: a.student_id }
+            : { ...student, profile_id: a.student_id };
+          processStudent(studentWithId);
+        }
+      });
+
+      const uniqueStudents = Array.from(studentsMap.values());
+
+      const formattedAppts = apptsData ? apptsData.map((apt: any) => {
+        const studentProfile = Array.isArray(apt.student) ? apt.student[0]?.profile : apt.student?.profile;
+        const studentObj = Array.isArray(apt.student) ? apt.student[0] : apt.student;
+        const clientName = studentProfile?.name || 'Aluno';
+        
+        const studentInMap = studentsMap.get(apt.student_id);
+        if (studentInMap && (studentInMap.nextClass === 'A agendar' || apt.status === 'confirmed')) {
+          studentInMap.nextClass = `${apt.date}, ${apt.time}`;
+        }
+
+        return {
+          id: apt.id,
+          clientName,
+          objective: studentObj?.objective || 'Treino',
+          status: apt.status,
+          date: apt.date,
+          time: apt.time,
+        };
+      }) : [];
+
+      setStudents(uniqueStudents);
+      setAppointments(formattedAppts);
+
+    } catch (err) {
+      console.error('Error loading appointments screen data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleAcceptAppointment = async (aptId: string, clientName: string) => {
+    if (!isSupabaseConfigured()) {
+      Alert.alert('Sucesso', `Agendamento de ${clientName} confirmado!`);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .update({ status: 'confirmed' })
+        .eq('id', aptId);
+
+      if (error) throw error;
+      Alert.alert('Sucesso', `Agendamento de ${clientName} confirmado!`);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', 'Não foi possível confirmar o agendamento.');
+    }
+  };
+
+  const handleDeclineAppointment = async (aptId: string, clientName: string) => {
+    if (!isSupabaseConfigured()) {
+      Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', aptId);
+
+      if (error) throw error;
+      Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
+      await loadData();
+    } catch (e: any) {
+      Alert.alert('Erro', 'Não foi possível recusar o agendamento.');
+    }
+  };
+
+  const filteredStudents = students.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
     s.objective.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAcceptAppointment = (clientName: string) => {
-    Alert.alert('Sucesso', `Agendamento de ${clientName} confirmado!`);
-  };
-
-  const handleDeclineAppointment = (clientName: string) => {
-    Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
-  };
+  if (loading) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <ActivityIndicator size="large" color="#a3e635" />
+      </View>
+    );
+  }
 
   if (selectedStudent) {
     return (
@@ -130,7 +310,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
       <View className="p-6 gap-6">
         <View className="pt-4 gap-1">
           <Text className="text-2xl font-bold text-zinc-100">Alunos</Text>
-          <Text className="text-zinc-400 text-sm">{MOCK_STUDENTS.length} alunos ativos</Text>
+          <Text className="text-zinc-400 text-sm">{students.length} alunos ativos</Text>
         </View>
 
         {/* Tab Selector */}
@@ -212,13 +392,13 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
 
         {activeTab === 'appointments' && (
           <View className="gap-3">
-            {MOCK_APPOINTMENTS.map(apt => (
+            {appointments.map(apt => (
               <Card key={apt.id} className="p-0 overflow-hidden">
                 <View className="p-4 flex-row items-center justify-between border-b border-zinc-800/50">
                   <View className="flex-row items-center gap-3">
                     <View className="w-10 h-10 rounded-full bg-zinc-800 items-center justify-center">
                       <Text className="font-bold text-zinc-400 text-sm">
-                        {apt.clientName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {apt.clientName.split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                       </Text>
                     </View>
                     <View>
@@ -241,13 +421,13 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
                   {apt.status === 'pending' && (
                     <View className="flex-row gap-2">
                       <Pressable
-                        onPress={() => handleDeclineAppointment(apt.clientName)}
+                        onPress={() => handleDeclineAppointment(apt.id, apt.clientName)}
                         className="w-8 h-8 rounded-full bg-red-500/10 items-center justify-center active:scale-95"
                       >
                         <XCircle size={16} color="#ef4444" />
                       </Pressable>
                       <Pressable
-                        onPress={() => handleAcceptAppointment(apt.clientName)}
+                        onPress={() => handleAcceptAppointment(apt.id, apt.clientName)}
                         className="w-8 h-8 rounded-full bg-lime-400/10 items-center justify-center active:scale-95"
                       >
                         <CheckCircle2 size={16} color="#a3e635" />

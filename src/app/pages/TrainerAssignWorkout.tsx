@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { Card, Input } from '../components/native/UI';
 import { GlowingButton } from '../components/native/AuthUI';
@@ -16,6 +17,7 @@ import {
   ChevronRight,
   Plus,
 } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 const WORKOUT_TEMPLATES = [
   { id: 't1', name: 'Treino A - Peito e Tríceps', type: 'Hipertrofia', duration: '45 min', color: 'bg-blue-500/10 text-blue-400' },
@@ -25,6 +27,45 @@ const WORKOUT_TEMPLATES = [
   { id: 't5', name: 'Full Body Funcional', type: 'Condicionamento', duration: '40 min', color: 'bg-teal-500/10 text-teal-400' }
 ];
 
+const getExercisesForTemplate = (templateId: string) => {
+  switch (templateId) {
+    case 't1':
+      return [
+        { name: 'Supino Reto', sets: 4, reps: '10-12' },
+        { name: 'Fly Inclinado', sets: 3, reps: '12' },
+        { name: 'Tríceps Corda', sets: 3, reps: '15' }
+      ];
+    case 't2':
+      return [
+        { name: 'Puxada Alta', sets: 4, reps: '10-12' },
+        { name: 'Remada Baixa', sets: 3, reps: '12' },
+        { name: 'Rosca Direta', sets: 3, reps: '12' }
+      ];
+    case 't3':
+      return [
+        { name: 'Agachamento Livre', sets: 4, reps: '10' },
+        { name: 'Leg Press 45', sets: 3, reps: '12' },
+        { name: 'Cadeira Flexora', sets: 3, reps: '15' }
+      ];
+    case 't4':
+      return [
+        { name: 'Polichinelo', sets: 4, reps: '45s' },
+        { name: 'Burpees', sets: 4, reps: '30s' },
+        { name: 'Corrida no Lugar', sets: 4, reps: '1m' }
+      ];
+    case 't5':
+      return [
+        { name: 'Flexão de Braço', sets: 3, reps: '15' },
+        { name: 'Avanço/Passada', sets: 3, reps: '12' },
+        { name: 'Prancha Abdominal', sets: 3, reps: '1m' }
+      ];
+    default:
+      return [
+        { name: 'Exercício Padrão', sets: 3, reps: '10' }
+      ];
+  }
+};
+
 type TrainerAssignWorkoutProps = {
   studentId?: string;
   onFinish: () => void;
@@ -32,26 +73,171 @@ type TrainerAssignWorkoutProps = {
 };
 
 export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: TrainerAssignWorkoutProps) {
+  const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const [selectedStudent, setSelectedStudent] = useState<typeof MOCK_STUDENTS[0] | null>(
-    MOCK_STUDENTS.find(s => s.id === studentId) || null
-  );
+  const [studentsList, setStudentsList] = useState<any[]>(MOCK_STUDENTS);
+  const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [selectedDate, setSelectedDate] = useState('Amanhã, 18:00');
   const [selectedTemplate, setSelectedTemplate] = useState<typeof WORKOUT_TEMPLATES[0] | null>(null);
 
-  const handleFinish = () => {
+  useEffect(() => {
+    async function loadStudents() {
+      if (!isSupabaseConfigured()) {
+        setStudentsList(MOCK_STUDENTS);
+        const initialStudent = MOCK_STUDENTS.find(s => s.id === studentId);
+        if (initialStudent) {
+          setSelectedStudent(initialStudent);
+        }
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('students')
+          .select(`
+            profile_id,
+            objective,
+            streak,
+            profile:profiles (
+              name,
+              email
+            )
+          `);
+
+        if (error) throw error;
+
+        if (data) {
+          const formatted = data.map((s: any) => {
+            const profile = s.profile;
+            const nameParts = (profile?.name || 'Aluno').split(' ');
+            const initials = nameParts.map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+            return {
+              id: s.profile_id,
+              name: profile?.name || 'Aluno',
+              email: profile?.email || '',
+              objective: s.objective || 'Treino',
+              streak: s.streak || 0,
+              initials,
+            };
+          });
+          setStudentsList(formatted);
+          const initialStudent = formatted.find(s => s.id === studentId);
+          if (initialStudent) {
+            setSelectedStudent(initialStudent);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading students in assign workout:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadStudents();
+  }, [studentId]);
+
+  const handleFinish = async () => {
     if (!selectedStudent || !selectedTemplate) return;
 
-    Alert.alert(
-      'Treino Atribuído! 🎉',
-      `Treino "${selectedTemplate.name}" atribuído com sucesso para ${selectedStudent.name}!`,
-      [
-        {
-          text: 'Ok',
-          onPress: onFinish,
-        },
-      ]
-    );
+    if (!isSupabaseConfigured()) {
+      Alert.alert(
+        'Treino Atribuído! 🎉',
+        `Treino "${selectedTemplate.name}" atribuído com sucesso para ${selectedStudent.name}!`,
+        [
+          {
+            text: 'Ok',
+            onPress: onFinish,
+          },
+        ]
+      );
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Erro', 'Não foi possível encontrar o usuário autenticado.');
+        return;
+      }
+
+      // 1. Insert workout
+      const { data: workoutData, error: wError } = await supabase
+        .from('workouts')
+        .insert({
+          student_id: selectedStudent.id,
+          trainer_id: user.id,
+          title: selectedTemplate.name,
+          duration: selectedTemplate.duration,
+          level: 'Intermediário',
+        })
+        .select()
+        .single();
+
+      if (wError) throw wError;
+
+      // 2. Insert exercises
+      const exercisesList = getExercisesForTemplate(selectedTemplate.id);
+      const exercisesToInsert = exercisesList.map((ex, index) => ({
+        workout_id: workoutData.id,
+        name: ex.name,
+        sets: ex.sets,
+        reps: ex.reps,
+        sequence_order: index + 1,
+      }));
+
+      const { error: exError } = await supabase
+        .from('exercises')
+        .insert(exercisesToInsert);
+
+      if (exError) throw exError;
+
+      // 3. Insert appointment
+      let dateStr = 'Amanhã';
+      let timeStr = '18:00';
+      if (selectedDate.includes(',')) {
+        const parts = selectedDate.split(',');
+        dateStr = parts[0].trim();
+        timeStr = parts[1].trim();
+      } else if (selectedDate.includes(' ')) {
+        const parts = selectedDate.split(' ');
+        dateStr = parts[0].trim();
+        timeStr = parts[1].trim();
+      } else {
+        dateStr = selectedDate;
+      }
+
+      const { error: aptError } = await supabase
+        .from('appointments')
+        .insert({
+          trainer_id: user.id,
+          student_id: selectedStudent.id,
+          date: dateStr,
+          time: timeStr,
+          status: 'confirmed',
+        });
+
+      if (aptError) {
+        console.warn('Could not schedule appointment, but workout was created:', aptError.message);
+      }
+
+      Alert.alert(
+        'Treino Atribuído! 🎉',
+        `Treino "${selectedTemplate.name}" atribuído com sucesso para ${selectedStudent.name}!`,
+        [
+          {
+            text: 'Ok',
+            onPress: onFinish,
+          },
+        ]
+      );
+    } catch (err: any) {
+      console.error('Error assigning workout:', err);
+      Alert.alert('Erro', 'Houve um erro ao atribuir o treino: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleBack = () => {
@@ -61,6 +247,14 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
       onGoBack();
     }
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <ActivityIndicator size="large" color="#a3e635" />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-zinc-950">
@@ -92,7 +286,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
             </View>
 
             <View className="gap-3">
-              {MOCK_STUDENTS.map(student => {
+              {studentsList.map(student => {
                 const isSelected = selectedStudent?.id === student.id;
                 return (
                   <Pressable

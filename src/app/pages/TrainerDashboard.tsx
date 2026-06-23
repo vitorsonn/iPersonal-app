@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
 import { MOCK_TRAINER, MOCK_APPOINTMENTS } from '../mockData';
 import { Avatar, Card } from '../components/native/UI';
@@ -17,17 +18,126 @@ import {
   Share2,
   Users,
 } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../services/supabase';
 
 type TrainerDashboardProps = {
   onNavigate: (screen: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments', params?: any) => void;
 };
 
 export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) {
-  const todayAppointments = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
+  const [loading, setLoading] = useState(false);
+  const [trainer, setTrainer] = useState({
+    name: MOCK_TRAINER.name,
+    avatar: MOCK_TRAINER.avatar,
+    username: MOCK_TRAINER.username,
+  });
+  const [activeStudentsCount, setActiveStudentsCount] = useState(24);
+  const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      if (!isSupabaseConfigured()) {
+        const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
+        setTodayAppointments(mockToday);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
+          setTodayAppointments(mockToday);
+          return;
+        }
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('name, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        const { data: trainerData } = await supabase
+          .from('trainers')
+          .select('username')
+          .eq('profile_id', user.id)
+          .single();
+
+        if (profile) {
+          setTrainer({
+            name: profile.name || MOCK_TRAINER.name,
+            avatar: profile.avatar_url || MOCK_TRAINER.avatar,
+            username: trainerData?.username || MOCK_TRAINER.username,
+          });
+        }
+
+        const { data: workouts } = await supabase
+          .from('workouts')
+          .select('student_id')
+          .eq('trainer_id', user.id);
+
+        const { data: appointments } = await supabase
+          .from('appointments')
+          .select('student_id')
+          .eq('trainer_id', user.id);
+
+        const studentIds = new Set([
+          ...(workouts || []).map(w => w.student_id),
+          ...(appointments || []).map(a => a.student_id)
+        ]);
+        setActiveStudentsCount(studentIds.size || 0);
+
+        const { data: apptsData } = await supabase
+          .from('appointments')
+          .select(`
+            id,
+            date,
+            time,
+            status,
+            student:student_id (
+              objective,
+              profile:profiles (
+                name
+              )
+            )
+          `)
+          .eq('trainer_id', user.id)
+          .eq('date', 'Hoje');
+
+        if (apptsData) {
+          const formatted = apptsData.map((apt: any) => ({
+            id: apt.id,
+            time: apt.time,
+            clientName: apt.student?.profile?.name || 'Aluno',
+            objective: apt.student?.objective || 'Treino',
+            status: apt.status,
+          }));
+          setTodayAppointments(formatted);
+        } else {
+          setTodayAppointments([]);
+        }
+
+      } catch (err) {
+        console.error('Error loading trainer dashboard:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
 
   const copyLink = () => {
-    Alert.alert('Link Copiado', `ipersonal.app/personal/${MOCK_TRAINER.username}`);
+    Alert.alert('Link Copiado', `ipersonal.app/personal/${trainer.username}`);
   };
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <ActivityIndicator size="large" color="#a3e635" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -39,10 +149,10 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         {/* Header */}
         <View className="flex-row items-center justify-between pt-4">
           <View className="flex-row items-center gap-4">
-            <Avatar src={MOCK_TRAINER.avatar} size="md" alt={MOCK_TRAINER.name} />
+            <Avatar src={trainer.avatar} size="md" alt={trainer.name} />
             <View>
               <Text className="text-zinc-400 text-sm">Olá,</Text>
-              <Text className="text-xl font-bold text-zinc-100">{MOCK_TRAINER.name.split(' ')[0]}</Text>
+              <Text className="text-xl font-bold text-zinc-100">{trainer.name.split(' ')[0]}</Text>
             </View>
           </View>
           <Pressable
@@ -80,7 +190,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
             <View className="flex-row items-center gap-2">
               <View className="bg-zinc-950/10 px-3 py-2.5 rounded-xl flex-1 justify-center">
                 <Text className="text-zinc-950 text-sm font-medium" numberOfLines={1}>
-                  ipersonal.app/personal/{MOCK_TRAINER.username}
+                  ipersonal.app/personal/{trainer.username}
                 </Text>
               </View>
               <Pressable
@@ -103,7 +213,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
               <Users size={20} color="#3b82f6" />
             </View>
             <View>
-              <Text className="text-3xl font-bold text-zinc-100">24</Text>
+              <Text className="text-3xl font-bold text-zinc-100">{activeStudentsCount}</Text>
               <Text className="text-sm text-zinc-400 font-medium mt-1">Alunos Ativos</Text>
             </View>
           </Card>
