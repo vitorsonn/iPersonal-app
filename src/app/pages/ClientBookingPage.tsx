@@ -1,0 +1,259 @@
+import React, { useState } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
+import { MOCK_TRAINER } from '../mockData';
+import { Avatar, Card, Input, Label } from '../components/native/UI';
+import { GlowingButton } from '../components/native/AuthUI';
+import {
+  Award,
+  Calendar,
+  CheckCircle2,
+  ChevronLeft,
+  Clock,
+  Star,
+} from 'lucide-react-native';
+
+type ClientBookingPageProps = {
+  username?: string;
+  onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts', params?: any) => void;
+  onGoBack: () => void;
+};
+
+export default function ClientBookingPage({ username, onNavigate, onGoBack }: ClientBookingPageProps) {
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [step, setStep] = useState<'profile' | 'form'>('profile');
+
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [objective, setObjective] = useState('');
+
+  const trainer = MOCK_TRAINER;
+
+  const handleObjectivePress = () => {
+    Alert.alert(
+      'Selecionar Objetivo',
+      'Escolha seu objetivo principal:',
+      [
+        { text: 'Emagrecimento', onPress: () => setObjective('Emagrecimento') },
+        { text: 'Hipertrofia', onPress: () => setObjective('Hipertrofia') },
+        { text: 'Condicionamento Físico', onPress: () => setObjective('Condicionamento Físico') },
+        { text: 'Reabilitação', onPress: () => setObjective('Reabilitação') },
+        { text: 'Cancelar', style: 'cancel' },
+      ]
+    );
+  };
+
+  const handleConfirm = () => {
+    if (!fullName || !phone || !email || !objective) {
+      Alert.alert('Erro', 'Por favor, preencha todos os campos.');
+      return;
+    }
+    onNavigate('ClientSuccess', { username });
+  };
+
+  const selectedSlotData = trainer.availableSlots.find(s => s.id === selectedSlot);
+
+  if (step === 'form') {
+    return (
+      <View className="flex-1 bg-zinc-950">
+        {/* Header */}
+        <View className="px-6 pt-12 pb-4 flex-row items-center gap-4 border-b border-zinc-900 bg-zinc-950/80">
+          <Pressable
+            onPress={() => setStep('profile')}
+            className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 items-center justify-center active:scale-95"
+          >
+            <ChevronLeft size={20} color="#71717a" />
+          </Pressable>
+          <View className="flex-1">
+            <Text className="text-zinc-400 text-xs">Agendando com</Text>
+            <Text className="font-bold text-zinc-100 text-base" numberOfLines={1}>
+              {trainer.name}
+            </Text>
+          </View>
+        </View>
+
+        {/* Form Container */}
+        <ScrollView className="flex-1 p-6" contentContainerStyle={{ paddingBottom: 120 }}>
+          <View className="gap-6">
+            <View>
+              <Text className="text-2xl font-bold text-zinc-100">Seus Detalhes</Text>
+              {selectedSlotData && (
+                <View className="flex-row flex-wrap items-center mt-1 gap-1">
+                  <Text className="text-zinc-400 text-sm">Preencha para confirmar o agendamento em </Text>
+                  <Text className="text-lime-400 font-bold text-sm">
+                    {selectedSlotData.date === '2026-06-15' ? 'Segunda' : 'Terça'} às {selectedSlotData.time}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <View className="gap-5">
+              <View className="gap-2">
+                <Label>Nome completo</Label>
+                <Input value={fullName} onChangeText={setFullName} placeholder="Ex: João Silva" />
+              </View>
+
+              <View className="gap-2">
+                <Label>Telefone (WhatsApp)</Label>
+                <Input
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholder="(00) 00000-0000"
+                />
+              </View>
+
+              <View className="gap-2">
+                <Label>E-mail</Label>
+                <Input
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  placeholder="seu@email.com"
+                />
+              </View>
+
+              <View className="gap-2">
+                <Label>Qual o seu objetivo principal?</Label>
+                <Pressable
+                  onPress={handleObjectivePress}
+                  className="h-14 w-full rounded-2xl border border-zinc-800 bg-zinc-950 px-4 justify-center"
+                >
+                  <Text className={`text-sm ${objective ? 'text-zinc-100' : 'text-zinc-500'}`}>
+                    {objective || 'Selecione...'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <GlowingButton className="mt-4" onPress={handleConfirm}>
+                <Text className="text-zinc-950 font-bold text-base">Confirmar Agendamento</Text>
+              </GlowingButton>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  return (
+    <View className="flex-1 bg-zinc-950">
+      {/* Scrollable details */}
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: selectedSlot ? 120 : 60 }}>
+        {/* Cover visual placeholder */}
+        <View className="h-48 w-full bg-zinc-900 items-center justify-center relative overflow-hidden">
+          <View className="absolute inset-0 bg-zinc-900/60" />
+          <View className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-zinc-950 to-transparent" />
+          {/* Back button */}
+          <Pressable
+            onPress={onGoBack}
+            className="absolute top-12 left-6 w-10 h-10 rounded-full bg-zinc-950/80 items-center justify-center border border-zinc-850 z-25"
+          >
+            <ChevronLeft size={20} color="#e4e4e7" />
+          </Pressable>
+        </View>
+
+        {/* Profile Card Overlay */}
+        <View className="px-6 -mt-16 relative z-10 gap-6">
+          <View className="items-center gap-3">
+            <Avatar src={trainer.avatar} size="xl" className="ring-4 ring-zinc-950 shadow-xl" />
+            <View className="items-center">
+              <Text className="text-2xl font-bold text-zinc-100 tracking-tight">{trainer.name}</Text>
+              <Text className="text-lime-400 font-semibold text-sm mt-0.5">{trainer.role}</Text>
+            </View>
+            <Text className="text-zinc-400 text-sm text-center leading-relaxed px-4">
+              {trainer.bio}
+            </Text>
+          </View>
+
+          {/* Specialties Card */}
+          <Card className="gap-5">
+            <View className="gap-3">
+              <View className="flex-row items-center gap-2">
+                <Star size={18} color="#a3e635" />
+                <Text className="font-bold text-base text-zinc-200">Especialidades</Text>
+              </View>
+              <View className="flex-row flex-wrap gap-2">
+                {trainer.specialties.map(spec => (
+                  <View key={spec} className="px-3 py-1.5 rounded-full bg-zinc-800 border border-zinc-700">
+                    <Text className="text-zinc-300 text-xs font-semibold">{spec}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View className="gap-3 border-t border-zinc-800/60 pt-4">
+              <View className="flex-row items-center gap-2">
+                <Award size={18} color="#a3e635" />
+                <Text className="font-bold text-base text-zinc-200">Certificações</Text>
+              </View>
+              <View className="gap-2">
+                {trainer.certifications.map(cert => (
+                  <View key={cert} className="flex-row items-center gap-2">
+                    <CheckCircle2 size={14} color="#71717a" />
+                    <Text className="text-sm text-zinc-400">{cert}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          </Card>
+
+          {/* Open Slots */}
+          <View className="gap-4">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Calendar size={20} color="#a3e635" />
+                <Text className="text-lg font-bold text-zinc-100">Horários Livres</Text>
+              </View>
+              <View className="px-2.5 py-1 bg-zinc-900 rounded-md border border-zinc-850">
+                <Text className="text-[10px] text-zinc-500 font-semibold uppercase">Jun 15 - 16</Text>
+              </View>
+            </View>
+
+            <View className="flex-row flex-wrap gap-3">
+              {trainer.availableSlots.map(slot => {
+                const isSelected = selectedSlot === slot.id;
+                return (
+                  <Pressable
+                    key={slot.id}
+                    onPress={() => setSelectedSlot(slot.id)}
+                    className={`p-4 rounded-2xl border flex-1 min-w-[45%] ${
+                      isSelected
+                        ? 'bg-lime-400/10 border-lime-400'
+                        : 'bg-zinc-900 border-zinc-800'
+                    }`}
+                  >
+                    <Text className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${isSelected ? 'text-lime-400' : 'text-zinc-500'}`}>
+                      {slot.date === '2026-06-15' ? 'Segunda' : 'Terça'}
+                    </Text>
+                    <View className="flex-row items-center gap-1.5 mt-1">
+                      <Clock size={14} color={isSelected ? '#a3e635' : '#e4e4e7'} />
+                      <Text className={`font-semibold text-base ${isSelected ? 'text-lime-400' : 'text-zinc-200'}`}>
+                        {slot.time}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Floating Action Button */}
+      {selectedSlot && (
+        <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent pb-8">
+          <GlowingButton className="w-full animate-fade-in" onPress={() => setStep('form')}>
+            <Text className="text-zinc-950 font-bold text-base">Continuar Agendamento</Text>
+          </GlowingButton>
+        </View>
+      )}
+    </View>
+  );
+}

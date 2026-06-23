@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "iPersonal",
+    "slug": "ipersonal",
+    "scheme": "ipersonal",
+    "userInterfaceStyle": "dark",
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
