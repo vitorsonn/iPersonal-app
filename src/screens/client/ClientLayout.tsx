@@ -11,7 +11,7 @@ type ClientTabType = 'dashboard' | 'workouts' | 'profile';
 type ClientLayoutProps = {
   activeTab: ClientTabType;
   setActiveTab: (tab: ClientTabType) => void;
-  onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts', params?: any) => void;
+  onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts' | 'ClientWorkoutSuccess', params?: any) => void;
   onLogout: () => void;
 };
 
@@ -33,7 +33,7 @@ export default function ClientLayout({
       case 'dashboard':
         return <ClientDashboard onNavigate={onNavigate} />;
       case 'workouts':
-        return <ClientWorkouts />;
+        return <ClientWorkouts onNavigate={onNavigate} />;
       case 'profile':
         return <ClientProfile onLogout={onLogout} />;
       default:

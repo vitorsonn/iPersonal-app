@@ -9,6 +9,8 @@ import TrainerAssignWorkout from './src/screens/trainer/TrainerAssignWorkout';
 import ClientLayout from './src/screens/client/ClientLayout';
 import ClientBookingPage from './src/screens/client/ClientBookingPage';
 import ClientSuccessPage from './src/screens/client/ClientSuccessPage';
+import ClientWorkoutSuccessPage from './src/screens/client/ClientWorkoutSuccessPage';
+import NotificationsScreen from './src/screens/shared/NotificationsScreen';
 import { AuthRole } from './src/components/auth/AuthUI';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { ToastProvider } from './src/components/common/Toast';
@@ -22,8 +24,10 @@ type ScreenState =
   | { name: 'TrainerMain'; tab: TabType }
   | { name: 'TrainerAssignWorkout'; studentId?: string }
   | { name: 'ClientMain'; tab: ClientTabType }
-  | { name: 'ClientBooking'; username?: string }
-  | { name: 'ClientSuccess'; username?: string };
+  | { name: 'ClientBooking'; username?: string; appointmentId?: string }
+  | { name: 'ClientSuccess'; username?: string }
+  | { name: 'ClientWorkoutSuccess' }
+  | { name: 'Notifications'; role?: 'student' | 'trainer' };
 
 export default function App() {
   const [screen, setScreen] = useState<ScreenState>({ name: 'Splash' });
@@ -321,7 +325,7 @@ export default function App() {
 
   // Trainer Navigation handlers
   const handleTrainerNavigate = (
-    target: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments',
+    target: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments' | 'Notifications',
     params?: any
   ) => {
     if (target === 'TrainerAssignWorkout') {
@@ -333,18 +337,20 @@ export default function App() {
       setScreen({ name: 'TrainerMain', tab: 'agenda' });
     } else if (target === 'TrainerAppointments') {
       setScreen({ name: 'TrainerMain', tab: 'appointments' });
+    } else if (target === 'Notifications') {
+      setScreen({ name: 'Notifications', role: 'trainer' });
     }
   };
 
-  // Client/Student Navigation handlers
   const handleClientNavigate = (
-    target: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts',
+    target: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts' | 'ClientWorkoutSuccess' | 'Notifications',
     params?: any
   ) => {
     if (target === 'ClientBooking') {
       setScreen({
         name: 'ClientBooking',
         username: params?.username,
+        appointmentId: params?.appointmentId,
       });
     } else if (target === 'ClientSuccess') {
       setScreen({
@@ -353,6 +359,10 @@ export default function App() {
       });
     } else if (target === 'ClientWorkouts') {
       setScreen({ name: 'ClientMain', tab: 'workouts' });
+    } else if (target === 'ClientWorkoutSuccess') {
+      setScreen({ name: 'ClientWorkoutSuccess' });
+    } else if (target === 'Notifications') {
+      setScreen({ name: 'Notifications', role: 'student' });
     }
   };
 
@@ -413,6 +423,7 @@ export default function App() {
         return (
           <ClientBookingPage
             username={screen.username}
+            appointmentId={screen.appointmentId}
             onNavigate={handleClientNavigate}
             onGoBack={() => setScreen({ name: 'ClientMain', tab: 'dashboard' })}
           />
@@ -423,6 +434,26 @@ export default function App() {
           <ClientSuccessPage
             username={screen.username}
             onFinish={() => setScreen({ name: 'ClientMain', tab: 'dashboard' })}
+          />
+        );
+
+      case 'ClientWorkoutSuccess':
+        return (
+          <ClientWorkoutSuccessPage
+            onFinish={() => setScreen({ name: 'ClientMain', tab: 'workouts' })}
+          />
+        );
+
+      case 'Notifications':
+        return (
+          <NotificationsScreen
+            onGoBack={() => {
+              if (screen.name === 'Notifications' && screen.role === 'trainer') {
+                setScreen({ name: 'TrainerMain', tab: 'dashboard' });
+              } else {
+                setScreen({ name: 'ClientMain', tab: 'dashboard' });
+              }
+            }}
           />
         );
 

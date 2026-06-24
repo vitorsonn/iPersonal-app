@@ -18,7 +18,11 @@ import {
 } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
 
-export default function ClientWorkouts() {
+type ClientWorkoutsProps = {
+  onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts' | 'ClientWorkoutSuccess', params?: any) => void;
+};
+
+export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [objective, setObjective] = useState<string>('');
   const [loading, setLoading] = useState(false);
@@ -126,16 +130,8 @@ export default function ClientWorkouts() {
   };
 
   const handleFinishWorkout = () => {
-    Alert.alert(
-      'Treino Concluído! 🎉',
-      'Parabéns por finalizar mais um treino! Continue assim.',
-      [
-        {
-          text: 'Valeu!',
-          onPress: () => setActiveWorkout(null),
-        },
-      ]
-    );
+    setActiveWorkout(null);
+    onNavigate('ClientWorkoutSuccess');
   };
 
   if (activeWorkout) {
@@ -225,13 +221,13 @@ export default function ClientWorkouts() {
         {/* Floating Complete Button */}
         <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent pb-8">
           <Pressable
-            disabled={completedExercises.size === 0}
+            disabled={numExercises === 0 || completedExercises.size !== numExercises}
             onPress={handleFinishWorkout}
             className={`w-full h-14 rounded-2xl items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.3)] ${
-              completedExercises.size === 0 ? 'bg-zinc-800 opacity-55' : 'bg-lime-400'
+              (numExercises === 0 || completedExercises.size !== numExercises) ? 'bg-zinc-800 opacity-55' : 'bg-lime-400'
             }`}
           >
-            <Text className={`text-center font-bold text-base ${completedExercises.size === 0 ? 'text-zinc-500' : 'text-zinc-950'}`}>
+            <Text className={`text-center font-bold text-base ${(numExercises === 0 || completedExercises.size !== numExercises) ? 'text-zinc-500' : 'text-zinc-950'}`}>
               Finalizar Treino
             </Text>
           </Pressable>

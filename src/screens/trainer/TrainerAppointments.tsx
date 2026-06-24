@@ -20,6 +20,7 @@ import {
   XCircle,
 } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { subscribeToAppointments } from '../../services/appointments';
 
 const objectiveColors: Record<string, string> = {
   'Hipertrofia': 'bg-blue-500/15 text-blue-400',
@@ -204,19 +205,26 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
     if (!isSupabaseConfigured()) return;
 
     let activeChannel: any = null;
+    let workoutsChannel: any = null;
+    let studentsChannel: any = null;
 
     async function setupRealtime() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      activeChannel = supabase
-        .channel(`trainer-appointments-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `trainer_id=eq.${user.id}` }, () => {
-          loadData();
-        })
+      activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
+        loadData();
+      });
+
+      workoutsChannel = supabase
+        .channel(`trainer-workouts-${user.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user.id}` }, () => {
           loadData();
         })
+        .subscribe();
+
+      studentsChannel = supabase
+        .channel(`trainer-students-${user.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user.id}` }, () => {
           loadData();
         })
@@ -229,32 +237,48 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
       if (activeChannel) {
         supabase.removeChannel(activeChannel);
       }
+      if (workoutsChannel) {
+        supabase.removeChannel(workoutsChannel);
+      }
+      if (studentsChannel) {
+        supabase.removeChannel(studentsChannel);
+      }
     };
   }, []);
 
   const handleAcceptAppointment = async (aptId: string, clientName: string) => {
     if (!isSupabaseConfigured()) {
-      Alert.alert('Sucesso', `Agendamento de ${clientName} confirmado!`);
+      const idx = MOCK_APPOINTMENTS.findIndex(a => a.id === aptId);
+      if (idx !== -1) {
+        MOCK_APPOINTMENTS[idx].status = 'scheduled';
+      }
+      Alert.alert('Sucesso', `Agendamento de ${clientName} aceito!`);
+      loadData();
       return;
     }
 
     try {
       const { error } = await supabase
         .from('appointments')
-        .update({ status: 'confirmed' })
+        .update({ status: 'scheduled' })
         .eq('id', aptId);
 
       if (error) throw error;
-      Alert.alert('Sucesso', `Agendamento de ${clientName} confirmado!`);
+      Alert.alert('Sucesso', `Agendamento de ${clientName} aceito!`);
       await loadData();
     } catch (e: any) {
-      Alert.alert('Erro', 'Não foi possível confirmar o agendamento.');
+      Alert.alert('Erro', 'Não foi possível aceitar o agendamento.');
     }
   };
 
   const handleDeclineAppointment = async (aptId: string, clientName: string) => {
     if (!isSupabaseConfigured()) {
+      const idx = MOCK_APPOINTMENTS.findIndex(a => a.id === aptId);
+      if (idx !== -1) {
+        MOCK_APPOINTMENTS.splice(idx, 1);
+      }
       Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
+      loadData();
       return;
     }
 
@@ -463,11 +487,28 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
                       <Text className="text-xs text-zinc-500 mt-0.5">{apt.objective}</Text>
                     </View>
                   </View>
-                  <View className={`px-2 py-1 rounded-full ${apt.status === 'confirmed' ? 'bg-lime-400/10' : 'bg-amber-400/10'}`}>
-                    <Text className={`text-[10px] font-semibold ${apt.status === 'confirmed' ? 'text-lime-400' : 'text-amber-400'}`}>
-                      {apt.status === 'confirmed' ? 'Confirmado' : 'Pendente'}
-                    </Text>
-                  </View>
+                  {(() => {
+                    const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
+                      pending: { label: 'Aguard. Confirmação', bg: 'bg-blue-400/10', text: 'text-blue-400' },
+                      PENDENTE: { label: 'Agendada', bg: 'bg-amber-400/10', text: 'text-amber-400' },
+                      AGUARDANDO: { label: 'Aguard. Confirmação', bg: 'bg-blue-400/10', text: 'text-blue-400' },
+                      scheduled: { label: 'Agendada', bg: 'bg-amber-400/10', text: 'text-amber-400' },
+                      confirmed: { label: 'Confirmada', bg: 'bg-lime-400/10', text: 'text-lime-400' },
+                      CHECKED_IN: { label: 'Checked-in', bg: 'bg-lime-400/10', text: 'text-lime-400' },
+                      no_show: { label: 'No-Show', bg: 'bg-red-400/10', text: 'text-red-400' },
+                      NO_SHOW: { label: 'No-Show', bg: 'bg-red-400/10', text: 'text-red-400' },
+                      CONCLUIDA: { label: 'Aula Completa', bg: 'bg-zinc-500/10', text: 'text-zinc-400' },
+                      completed: { label: 'Aula Completa', bg: 'bg-zinc-500/10', text: 'text-zinc-400' },
+                    };
+                    const config = statusConfig[apt.status] || statusConfig.pending;
+                    return (
+                      <View className={`px-2 py-1 rounded-full ${config.bg}`}>
+                        <Text className={`text-[10px] font-semibold ${config.text}`}>
+                          {config.label}
+                        </Text>
+                      </View>
+                    );
+                  })()}
                 </View>
                 <View className="bg-zinc-950/50 px-4 py-3 flex-row items-center justify-between">
                   <View className="flex-row items-center text-sm">
@@ -475,7 +516,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
                     <Text className="text-zinc-650 mx-2 text-xs">·</Text>
                     <Text className="font-semibold text-lime-400 text-xs">{apt.time}</Text>
                   </View>
-                  {apt.status === 'pending' && (
+                  {(apt.status === 'pending' || apt.status === 'PENDENTE') && (
                     <View className="flex-row gap-2">
                       <Pressable
                         onPress={() => handleDeclineAppointment(apt.id, apt.clientName)}

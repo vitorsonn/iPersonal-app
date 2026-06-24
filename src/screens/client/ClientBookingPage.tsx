@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_TRAINER } from '../../data/mockData';
+import { MOCK_TRAINER, MOCK_CLIENT, MOCK_APPOINTMENTS } from '../../data/mockData';
 import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import {
@@ -19,6 +19,7 @@ import {
   Star,
 } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { rescheduleAppointment } from '../../services/appointments';
 
 const getFriendlyDate = (dateStr: string) => {
   if (!dateStr) return '';
@@ -60,11 +61,13 @@ const formatTime = (timeStr: string) => {
 
 type ClientBookingPageProps = {
   username?: string;
+  appointmentId?: string;
   onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts', params?: any) => void;
   onGoBack: () => void;
 };
 
-export default function ClientBookingPage({ username, onNavigate, onGoBack }: ClientBookingPageProps) {
+export default function ClientBookingPage({ username, appointmentId, onNavigate, onGoBack }: ClientBookingPageProps) {
+  const isReschedule = !!appointmentId;
   const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [step, setStep] = useState<'profile' | 'form'>('profile');
@@ -132,8 +135,9 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
               id: s.id,
               date: s.date,
               time: s.time,
+              trainer_id: s.trainer_id || trainerData.profile_id,
             }))
-          : defaultSlots;
+          : defaultSlots.map(s => ({ ...s, trainer_id: trainerData.profile_id }));
 
         setTrainer({
           name: tProfile?.name || MOCK_TRAINER.name,
@@ -177,15 +181,159 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
     );
   };
 
-  const handleConfirm = () => {
+  const handleReschedule = async () => {
+    if (!selectedSlotData || !appointmentId) return;
+
+    try {
+      if (isSupabaseConfigured()) {
+        await rescheduleAppointment(
+          appointmentId,
+          selectedSlotData.date,
+          selectedSlotData.time,
+          selectedSlotData.id,
+        );
+      } else {
+        // Mock mode: update existing appointment in-place (no duplication)
+        const mockApt = MOCK_APPOINTMENTS.find((a: any) => a.id === appointmentId);
+        if (mockApt) {
+          mockApt.date = selectedSlotData.date;
+          mockApt.time = selectedSlotData.time;
+          mockApt.status = 'pending';
+        }
+        const mockClass = MOCK_CLIENT.upcomingClasses.find((c: any) => c.id === appointmentId);
+        if (mockClass) {
+          mockClass.date = selectedSlotData.date;
+          mockClass.time = selectedSlotData.time;
+          mockClass.status = 'pending';
+        }
+      }
+      onNavigate('ClientSuccess', { username });
+    } catch (err: any) {
+      console.error('Error rescheduling appointment:', err);
+      Alert.alert('Erro', 'Houve um erro ao reagendar: ' + err.message);
+    }
+  };
+
+  const handleConfirm = async () => {
     if (!fullName || !phone || !email || !objective) {
       Alert.alert('Erro', 'Por favor, preencha todos os campos.');
       return;
     }
+
+    if (isSupabaseConfigured() && selectedSlotData) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          Alert.alert('Erro', 'Você precisa estar logado para agendar.');
+          return;
+        }
+
+        // Clean up old active appointments (rescheduling)
+        const { data: oldApts } = await supabase
+          .from('appointments')
+          .select('trainer_id, date, time')
+          .eq('student_id', user.id)
+          .in('status', ['pending', 'scheduled', 'PENDENTE']);
+
+        if (oldApts && oldApts.length > 0) {
+          for (const oldApt of oldApts) {
+            // Free the slot
+            await supabase
+              .from('available_slots')
+              .update({ is_booked: false })
+              .eq('trainer_id', oldApt.trainer_id)
+              .eq('date', oldApt.date)
+              .eq('time', oldApt.time);
+          }
+
+          // Delete old appointments
+          await supabase
+            .from('appointments')
+            .delete()
+            .eq('student_id', user.id)
+            .in('status', ['pending', 'scheduled', 'PENDENTE']);
+        }
+
+        const { data: newApt, error: aptError } = await supabase
+          .from('appointments')
+          .insert({
+            trainer_id: selectedSlotData.trainer_id,
+            student_id: user.id,
+            date: selectedSlotData.date,
+            time: selectedSlotData.time,
+            status: 'pending',
+          })
+          .select()
+          .single();
+
+        if (aptError) throw aptError;
+
+        const { error: slotError } = await supabase
+          .from('available_slots')
+          .update({ is_booked: true })
+          .eq('id', selectedSlotData.id);
+
+        if (slotError) {
+          console.warn('Could not mark slot as booked:', slotError.message);
+        }
+
+        if (newApt) {
+          import('../../services/notificationService').then(service => {
+            service.createAppointmentNotification(
+              user.id,
+              selectedSlotData.trainer_id,
+              fullName || 'Aluno',
+              selectedSlotData.date,
+              selectedSlotData.time,
+              newApt.id
+            ).catch(err => console.error('Error creating appointment notification:', err));
+          });
+        }
+
+      } catch (err: any) {
+        console.error('Error confirming booking in DB:', err);
+        Alert.alert('Erro', 'Houve um erro ao salvar o agendamento no servidor: ' + err.message);
+        return;
+      }
+    } else if (selectedSlotData) {
+      // Offline/Mock mode
+      const newAptId = `mock-a-${Date.now()}`;
+      
+      // Remove old pending/scheduled appointments from mock lists
+      const oldAptsIdxs = MOCK_APPOINTMENTS.map((a, i) => 
+        (a.clientName === MOCK_CLIENT.name && (a.status === 'pending' || a.status === 'scheduled' || a.status === 'PENDENTE')) ? i : -1
+      ).filter(i => i !== -1);
+      
+      for (let i = oldAptsIdxs.length - 1; i >= 0; i--) {
+        MOCK_APPOINTMENTS.splice(oldAptsIdxs[i], 1);
+      }
+
+      MOCK_CLIENT.upcomingClasses = MOCK_CLIENT.upcomingClasses.filter(c => 
+        c.status !== 'pending' && c.status !== 'scheduled' && c.status !== 'PENDENTE'
+      );
+
+      MOCK_APPOINTMENTS.push({
+        id: newAptId,
+        clientName: MOCK_CLIENT.name,
+        date: selectedSlotData.date,
+        time: selectedSlotData.time,
+        status: 'pending',
+        objective: objective,
+      });
+
+      MOCK_CLIENT.upcomingClasses.unshift({
+        id: newAptId,
+        date: selectedSlotData.date,
+        time: selectedSlotData.time,
+        status: 'pending',
+        trainerName: trainer.name,
+      });
+    }
+
     onNavigate('ClientSuccess', { username });
   };
 
-  const selectedSlotData = trainer.availableSlots.find(s => s.id === selectedSlot);
+  const selectedSlotData = trainer.availableSlots.find(s => s.id === selectedSlot) as any;
 
   if (step === 'form') {
     return (
@@ -377,8 +525,10 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
       {/* Floating Action Button */}
       {selectedSlot && (
         <View className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-zinc-950 via-zinc-950 to-transparent pb-8">
-          <GlowingButton className="w-full animate-fade-in" onPress={() => setStep('form')}>
-            <Text className="text-zinc-950 font-bold text-base">Continuar Agendamento</Text>
+          <GlowingButton className="w-full animate-fade-in" onPress={isReschedule ? handleReschedule : () => setStep('form')}>
+            <Text className="text-zinc-950 font-bold text-base">
+              {isReschedule ? 'Confirmar Reagendamento' : 'Continuar Agendamento'}
+            </Text>
           </GlowingButton>
         </View>
       )}

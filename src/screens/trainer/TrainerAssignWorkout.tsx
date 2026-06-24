@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Card, Input } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
-import { MOCK_STUDENTS } from '../../data/mockData';
+import { MOCK_STUDENTS, MOCK_CLIENT, MOCK_APPOINTMENTS } from '../../data/mockData';
 import {
   Calendar,
   Check,
@@ -209,6 +209,73 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
     if (!selectedStudent || !selectedTemplate) return;
 
     if (!isSupabaseConfigured()) {
+      const dateStr = `${selectedClassDate.getFullYear()}-${String(selectedClassDate.getMonth() + 1).padStart(2, '0')}-${String(selectedClassDate.getDate()).padStart(2, '0')}`;
+      const timeStr = selectedClassTime;
+
+      // Check if the selected date is today/tomorrow for friendly display name
+      const today = new Date();
+      let displayDate = dateStr;
+      if (
+        selectedClassDate.getFullYear() === today.getFullYear() &&
+        selectedClassDate.getMonth() === today.getMonth() &&
+        selectedClassDate.getDate() === today.getDate()
+      ) {
+        displayDate = 'Hoje';
+      } else {
+        const tomorrow = new Date();
+        tomorrow.setDate(today.getDate() + 1);
+        if (
+          selectedClassDate.getFullYear() === tomorrow.getFullYear() &&
+          selectedClassDate.getMonth() === tomorrow.getMonth() &&
+          selectedClassDate.getDate() === tomorrow.getDate()
+        ) {
+          displayDate = 'Amanhã';
+        }
+      }
+
+      // Create new appointment in MOCK_APPOINTMENTS
+      const newAptId = `mock-a-${Date.now()}`;
+      MOCK_APPOINTMENTS.push({
+        id: newAptId,
+        clientName: selectedStudent.name,
+        date: displayDate,
+        time: timeStr,
+        status: 'scheduled',
+        objective: selectedStudent.objective || 'Treino',
+      });
+
+      // Update mock student's next class description
+      const mockStudent = MOCK_STUDENTS.find(s => s.id === selectedStudent.id);
+      if (mockStudent) {
+        mockStudent.nextClass = `${displayDate}, ${timeStr}`;
+      }
+
+      // If the selected student matches the mock client, add it to client's dashboard upcomingClasses and workouts list
+      if (selectedStudent.name === MOCK_CLIENT.name) {
+        MOCK_CLIENT.upcomingClasses.unshift({
+          id: newAptId,
+          date: displayDate,
+          time: timeStr,
+          status: 'scheduled',
+          trainerName: 'Carlos Silva',
+        });
+
+        // Add to client's workouts
+        const newWId = `mock-w-${Date.now()}`;
+        const templateExercises = getExercisesForTemplate(selectedTemplate.id);
+        MOCK_CLIENT.workouts.unshift({
+          id: newWId,
+          title: selectedTemplate.name,
+          duration: selectedTemplate.duration,
+          level: 'Intermediário',
+          exercises: templateExercises.map(ex => ({
+            name: ex.name,
+            sets: ex.sets,
+            reps: ex.reps
+          }))
+        });
+      }
+
       Alert.alert(
         'Treino Atribuído! 🎉',
         `Treino "${selectedTemplate.name}" atribuído com sucesso para ${selectedStudent.name}!`,
@@ -272,7 +339,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
           student_id: selectedStudent.id,
           date: dateStr,
           time: timeStr,
-          status: 'confirmed',
+          status: 'scheduled',
         });
 
       if (aptError) {

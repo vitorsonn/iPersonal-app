@@ -45,9 +45,9 @@ export const MOCK_STUDENTS = [
 ];
 
 export const MOCK_APPOINTMENTS = [
-  { id: 'a1', clientName: 'Ana Souza', date: 'Hoje', time: '08:00', status: 'confirmed', objective: 'Emagrecimento' },
-  { id: 'a2', clientName: 'Bruno Costa', date: 'Hoje', time: '09:00', status: 'pending', objective: 'Hipertrofia' },
-  { id: 'a3', clientName: 'Camila Lima', date: 'Amanhã', time: '18:00', status: 'confirmed', objective: 'Condicionamento' },
+  { id: 'a1', clientName: 'Ana Souza', date: 'Hoje', time: '14:00', status: 'scheduled', objective: 'Emagrecimento' },
+  { id: 'a2', clientName: 'Bruno Costa', date: 'Hoje', time: '16:00', status: 'pending', objective: 'Hipertrofia' },
+  { id: 'a3', clientName: 'Camila Lima', date: 'Amanhã', time: '18:00', status: 'scheduled', objective: 'Condicionamento' },
   { id: 'a4', clientName: 'Diego Ferreira', date: 'Amanhã', time: '07:00', status: 'confirmed', objective: 'Hipertrofia' },
   { id: 'a5', clientName: 'Elena Martins', date: '18 Jun', time: '10:00', status: 'pending', objective: 'Emagrecimento' },
 ];
@@ -60,8 +60,8 @@ export const MOCK_CLIENT = {
   objective: 'Emagrecimento',
   trainer: MOCK_TRAINER,
   upcomingClasses: [
-    { id: 'a1', date: 'Hoje', time: '08:00', status: 'confirmed', trainerName: 'Carlos Silva' },
-    { id: 'a4', date: '15 Jun', time: '08:00', status: 'confirmed', trainerName: 'Carlos Silva' }
+    { id: 'a1', date: 'Hoje', time: '14:00', status: 'scheduled', trainerName: 'Carlos Silva' },
+    { id: 'a4', date: 'Amanhã', time: '07:00', status: 'confirmed', trainerName: 'Carlos Silva' }
   ],
   workouts: [
     {

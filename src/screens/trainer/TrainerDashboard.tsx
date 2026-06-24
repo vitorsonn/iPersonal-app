@@ -20,9 +20,12 @@ import {
   Users,
 } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { subscribeToAppointments } from '../../services/appointments';
+import { getUserNotifications, subscribeToNotifications, Notification } from '../../services/notificationService';
+import { Bell } from 'lucide-react-native';
 
 type TrainerDashboardProps = {
-  onNavigate: (screen: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments', params?: any) => void;
+  onNavigate: (screen: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments' | 'Notifications', params?: any) => void;
 };
 
 export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) {
@@ -35,6 +38,8 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
   const [activeStudentsCount, setActiveStudentsCount] = useState(24);
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
   const [aulasHojeCount, setAulasHojeCount] = useState(0);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     async function loadData() {
@@ -54,6 +59,10 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
           setAulasHojeCount(mockToday.length);
           return;
         }
+
+        const notifs = await getUserNotifications(user.id);
+        setNotifications(notifs.slice(0, 5));
+        setUnreadCount(notifs.filter(n => !n.read).length);
 
         const { data: profile } = await supabase
           .from('profiles')
@@ -193,23 +202,37 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
     loadData();
 
     let activeChannel: any = null;
+    let workoutsChannel: any = null;
+    let studentsChannel: any = null;
+    let notifsChannel: any = null;
 
     async function setupRealtime() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      activeChannel = supabase
-        .channel(`trainer-dashboard-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `trainer_id=eq.${user.id}` }, () => {
-          loadData();
-        })
+      activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
+        loadData();
+      });
+
+      workoutsChannel = supabase
+        .channel(`trainer-workouts-${user.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user.id}` }, () => {
           loadData();
         })
+        .subscribe();
+
+      studentsChannel = supabase
+        .channel(`trainer-students-${user.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user.id}` }, () => {
           loadData();
         })
         .subscribe();
+
+      notifsChannel = subscribeToNotifications(user.id, async () => {
+        const notifs = await getUserNotifications(user.id);
+        setNotifications(notifs.slice(0, 5));
+        setUnreadCount(notifs.filter(n => !n.read).length);
+      });
     }
 
     setupRealtime();
@@ -217,6 +240,15 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
     return () => {
       if (activeChannel) {
         supabase.removeChannel(activeChannel);
+      }
+      if (workoutsChannel) {
+        supabase.removeChannel(workoutsChannel);
+      }
+      if (studentsChannel) {
+        supabase.removeChannel(studentsChannel);
+      }
+      if (notifsChannel) {
+        supabase.removeChannel(notifsChannel);
       }
     };
   }, []);
@@ -252,12 +284,15 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
           </View>
           <Pressable
             className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 items-center justify-center relative"
-            onPress={() => Alert.alert('Notificações', 'Sem novas notificações no momento.')}
+            onPress={() => onNavigate('Notifications')}
           >
-            <View className="absolute top-2 right-2 w-2 h-2 rounded-full bg-lime-400" />
+            {unreadCount > 0 && (
+              <View className="absolute top-1 right-1 bg-red-500 rounded-full min-w-[16px] h-4 items-center justify-center px-1 z-10">
+                <Text className="text-[9px] font-bold text-white">{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+            )}
             <View className="opacity-70">
-              {/* Notification Bell Icon */}
-              <Calendar size={18} color="#71717a" />
+              <Bell size={18} color={unreadCount > 0 ? "#a3e635" : "#71717a"} />
             </View>
           </Pressable>
         </View>
@@ -323,6 +358,33 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
           </Card>
         </View>
 
+        {/* Recent Notifications */}
+        {notifications.length > 0 && (
+          <View className="gap-3">
+            <View className="flex-row items-center justify-between">
+              <Text className="text-lg font-bold text-zinc-100">Notificações Recentes</Text>
+              <Pressable onPress={() => onNavigate('Notifications')}>
+                <Text className="text-lime-400 text-sm font-semibold">Ver todas</Text>
+              </Pressable>
+            </View>
+            <View className="gap-2">
+              {notifications.map(n => (
+                <Pressable key={n.id} onPress={() => onNavigate('Notifications')}>
+                  <Card className={`flex-row items-center justify-between p-3 ${n.read ? 'opacity-70' : 'border-lime-400/30 bg-lime-400/5'}`}>
+                    <View className="flex-1 pr-4">
+                      <Text className={`font-bold text-sm ${n.read ? 'text-zinc-300' : 'text-zinc-100'}`}>{n.title}</Text>
+                      <Text className="text-xs text-zinc-400" numberOfLines={1}>{n.message}</Text>
+                    </View>
+                    <Text className="text-[10px] text-zinc-500">
+                      {new Date(n.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </Card>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Today's Agenda */}
         <View className="gap-4">
           <View className="flex-row items-center justify-between">
@@ -359,7 +421,19 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
                       </View>
                       <Text className="text-sm text-zinc-400 mt-0.5">{apt.objective}</Text>
                     </View>
-                    <View className={`w-2 h-2 rounded-full ${apt.status === 'confirmed' ? 'bg-lime-400' : 'bg-amber-400'}`} />
+                    <View className={`w-2 h-2 rounded-full ${
+                      (apt.status === 'confirmed' || apt.status === 'CHECKED_IN') 
+                        ? 'bg-lime-400' 
+                        : (apt.status === 'scheduled' || apt.status === 'PENDENTE')
+                        ? 'bg-amber-400'
+                        : (apt.status === 'pending' || apt.status === 'AGUARDANDO')
+                        ? 'bg-blue-400'
+                        : (apt.status === 'no_show' || apt.status === 'NO_SHOW')
+                        ? 'bg-red-500'
+                        : (apt.status === 'CONCLUIDA' || apt.status === 'completed')
+                        ? 'bg-zinc-500'
+                        : 'bg-blue-400'
+                    }`} />
                   </Card>
                 </Pressable>
               ))

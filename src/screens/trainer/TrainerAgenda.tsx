@@ -19,6 +19,7 @@ import {
   Trash2,
 } from 'lucide-react-native';
 import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { subscribeToAppointments } from '../../services/appointments';
 import { useToast } from '../../components/common/Toast';
 
 export default function TrainerAgenda() {
@@ -346,12 +347,9 @@ export default function TrainerAgenda() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      activeChannel = supabase
-        .channel(`trainer-agenda-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `trainer_id=eq.${user.id}` }, () => {
-          loadData();
-        })
-        .subscribe();
+      activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
+        loadData();
+      });
 
       slotsChannel = supabase
         .channel(`trainer-slots-${user.id}`)
@@ -720,7 +718,19 @@ export default function TrainerAgenda() {
                       <Text className="font-bold text-zinc-100">{apt.clientName}</Text>
                       <Text className="text-sm text-zinc-400 mt-0.5">{apt.objective}</Text>
                     </View>
-                    <View className={`w-2 h-2 rounded-full ${apt.status === 'confirmed' ? 'bg-lime-400' : 'bg-amber-400'}`} />
+                    <View className={`w-2 h-2 rounded-full ${
+                      (apt.status === 'confirmed' || apt.status === 'CHECKED_IN') 
+                        ? 'bg-lime-400' 
+                        : (apt.status === 'scheduled' || apt.status === 'PENDENTE')
+                        ? 'bg-amber-400'
+                        : (apt.status === 'pending' || apt.status === 'AGUARDANDO')
+                        ? 'bg-blue-400'
+                        : (apt.status === 'no_show' || apt.status === 'NO_SHOW')
+                        ? 'bg-red-500'
+                        : (apt.status === 'CONCLUIDA' || apt.status === 'completed')
+                        ? 'bg-zinc-500'
+                        : 'bg-blue-400'
+                    }`} />
                   </Card>
                 ))
               ) : (
