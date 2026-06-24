@@ -8,8 +8,8 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { Card } from '../components/native/UI';
-import { MOCK_APPOINTMENTS, MOCK_STUDENTS } from '../mockData';
+import { Card } from '../../components/common/UI';
+import { MOCK_APPOINTMENTS, MOCK_STUDENTS } from '../../data/mockData';
 import {
   CalendarDays,
   CheckCircle2,
@@ -19,7 +19,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../services/supabase';
 
 const objectiveColors: Record<string, string> = {
   'Hipertrofia': 'bg-blue-500/15 text-blue-400',
@@ -64,7 +64,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
           student:student_id (
             objective,
             streak,
-            profile:profiles (
+            profile:profiles!students_profile_id_fkey (
               name,
               email,
               created_at
@@ -81,11 +81,26 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
           student:student_id (
             objective,
             streak,
-            profile:profiles (
+            profile:profiles!students_profile_id_fkey (
               name,
               email,
               created_at
             )
+          )
+        `)
+        .eq('trainer_id', user.id);
+
+      // 3. Fetch direct students linked by trainer_id
+      const { data: directStudentsData } = await supabase
+        .from('students')
+        .select(`
+          profile_id,
+          objective,
+          streak,
+          profile:profiles!students_profile_id_fkey (
+            name,
+            email,
+            created_at
           )
         `)
         .eq('trainer_id', user.id);
@@ -119,6 +134,10 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
         }
       };
 
+      directStudentsData?.forEach((s: any) => {
+        processStudent(s);
+      });
+
       workoutsData?.forEach((w: any) => {
         const student = w.student;
         if (student) {
@@ -146,9 +165,17 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
         const studentObj = Array.isArray(apt.student) ? apt.student[0] : apt.student;
         const clientName = studentProfile?.name || 'Aluno';
         
+        let displayDate = apt.date;
+        if (apt.date && apt.date.includes('-')) {
+          const parts = apt.date.split('-');
+          if (parts.length === 3) {
+            displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+          }
+        }
+
         const studentInMap = studentsMap.get(apt.student_id);
         if (studentInMap && (studentInMap.nextClass === 'A agendar' || apt.status === 'confirmed')) {
-          studentInMap.nextClass = `${apt.date}, ${apt.time}`;
+          studentInMap.nextClass = `${displayDate}, ${apt.time}`;
         }
 
         return {
@@ -156,7 +183,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
           clientName,
           objective: studentObj?.objective || 'Treino',
           status: apt.status,
-          date: apt.date,
+          date: displayDate,
           time: apt.time,
         };
       }) : [];
@@ -173,6 +200,36 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
 
   useEffect(() => {
     loadData();
+
+    if (!isSupabaseConfigured()) return;
+
+    let activeChannel: any = null;
+
+    async function setupRealtime() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      activeChannel = supabase
+        .channel(`trainer-appointments-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .subscribe();
+    }
+
+    setupRealtime();
+
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
   }, []);
 
   const handleAcceptAppointment = async (aptId: string, clientName: string) => {
@@ -243,7 +300,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
           </View>
 
           <View className="items-center gap-4 py-4">
-            <View className="w-20 h-20 rounded-full bg-gradient-to-br from-lime-400 to-emerald-500 items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.2)]">
+            <View className="w-20 h-20 rounded-full bg-lime-400 items-center justify-center shadow-[0_0_20px_rgba(163,230,53,0.2)]">
               <Text className="text-zinc-950 text-2xl font-bold">{selectedStudent.initials}</Text>
             </View>
             <View className="items-center">
@@ -340,7 +397,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
         {/* Tab Contents */}
         {activeTab === 'students' && (
           <View className="gap-4">
-            <View className="relative flex-row items-center bg-zinc-900 border border-zinc-850 rounded-2xl px-4 h-14">
+            <View className="relative flex-row items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-4 h-14">
               <Search size={18} color="#71717a" />
               <TextInput
                 className="flex-1 ml-3 text-zinc-100 text-sm"
@@ -359,7 +416,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
                   onPress={() => setSelectedStudent(student)}
                 >
                   <Card className="p-4 flex-row items-center gap-3 active:border-zinc-700">
-                    <View className="w-11 h-11 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 items-center justify-center shrink-0">
+                    <View className="w-11 h-11 rounded-full bg-zinc-800 items-center justify-center shrink-0">
                       <Text className="text-sm font-bold text-zinc-300">{student.initials}</Text>
                     </View>
                     <View className="flex-1 min-w-0">

@@ -7,9 +7,9 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_CLIENT } from '../mockData';
-import { Avatar, Card } from '../components/native/UI';
-import { GlowingButton } from '../components/native/AuthUI';
+import { MOCK_CLIENT } from '../../data/mockData';
+import { Avatar, Card } from '../../components/common/UI';
+import { GlowingButton } from '../../components/auth/AuthUI';
 import {
   ArrowRight,
   Calendar,
@@ -17,7 +17,7 @@ import {
   Play,
   Target,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../services/supabase';
 
 type ClientDashboardProps = {
   onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts', params?: any) => void;
@@ -53,7 +53,8 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
             streak,
             workouts_completed,
             objective,
-            profile:profile_id (
+            trainer_id,
+            profile:profiles!students_profile_id_fkey (
               name,
               avatar_url
             )
@@ -102,7 +103,27 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
           username: MOCK_CLIENT.trainer.username,
         };
 
-        if (apptsData && apptsData.length > 0 && apptsData[0].trainer) {
+        if (studentData.trainer_id) {
+          const { data: linkedTrainer } = await supabase
+            .from('trainers')
+            .select(`
+              username,
+              profile:profiles (
+                name,
+                avatar_url
+              )
+            `)
+            .eq('profile_id', studentData.trainer_id)
+            .single();
+
+          if (linkedTrainer) {
+            const tProfile = Array.isArray(linkedTrainer.profile) ? linkedTrainer.profile[0] : linkedTrainer.profile;
+            trainerInfo = {
+              name: tProfile?.name || MOCK_CLIENT.trainer.name,
+              username: linkedTrainer.username || MOCK_CLIENT.trainer.username,
+            };
+          }
+        } else if (apptsData && apptsData.length > 0 && apptsData[0].trainer) {
           const trainerObj = apptsData[0].trainer as any;
           const tProfile = Array.isArray(trainerObj)
             ? (Array.isArray(trainerObj[0]?.profile) ? trainerObj[0].profile[0] : trainerObj[0]?.profile)
@@ -138,9 +159,18 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
           const tProfile = Array.isArray(aptTrainer)
             ? (Array.isArray(aptTrainer[0]?.profile) ? aptTrainer[0].profile[0] : aptTrainer[0]?.profile)
             : (Array.isArray(aptTrainer?.profile) ? aptTrainer.profile[0] : aptTrainer?.profile);
+          
+          let displayDate = apt.date;
+          if (apt.date && apt.date.includes('-')) {
+            const parts = apt.date.split('-');
+            if (parts.length === 3) {
+              displayDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+          }
+
           return {
             id: apt.id,
-            date: apt.date,
+            date: displayDate,
             time: apt.time,
             status: apt.status,
             trainerName: tProfile?.name || 'Personal',
@@ -151,12 +181,12 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
 
         setClient({
           name: studentProfile?.name || MOCK_CLIENT.name,
-          avatar: studentProfile?.avatar_url || MOCK_CLIENT.avatar,
+          avatar: studentProfile?.avatar_url || null,
           streak: studentData.streak ?? 0,
           workoutsCompleted: studentData.workouts_completed ?? 0,
           trainer: trainerInfo,
           upcomingClasses: formattedUpcoming,
-          workouts: workoutsData && workoutsData.length > 0 ? workoutsData : MOCK_CLIENT.workouts,
+          workouts: workoutsData || [],
         });
 
       } catch (err) {
@@ -167,6 +197,34 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
     }
 
     loadData();
+
+    let activeChannel: any = null;
+
+    async function setupRealtime() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      activeChannel = supabase
+        .channel(`client-dashboard-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `student_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `student_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `profile_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .subscribe();
+    }
+
+    setupRealtime();
+
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
   }, []);
 
   const { upcomingClasses, trainer, streak, workoutsCompleted, workouts } = client;
@@ -231,7 +289,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
         <View className="gap-3">
           <Text className="text-lg font-bold text-zinc-100">Próxima Aula</Text>
           {nextClass ? (
-            <Card className="bg-gradient-to-br from-lime-400 to-emerald-500 p-6 relative overflow-hidden">
+            <Card className="bg-lime-400 border-lime-400 p-6 relative overflow-hidden">
               <View className="flex-row items-center justify-between z-10">
                 <View className="flex-1 pr-2">
                   <Text className="text-zinc-900 font-semibold mb-1">
@@ -289,21 +347,27 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
             </Pressable>
           </View>
 
-          <Pressable
-            onPress={() => onNavigate('ClientWorkouts')}
-          >
-            <Card className="p-5 flex-row items-center gap-4 active:border-zinc-700">
-              <View className="w-16 h-16 rounded-2xl bg-zinc-950 items-center justify-center border border-zinc-800">
-                <Play size={24} color="#a3e635" style={{ marginLeft: 3 }} />
-              </View>
-              <View className="flex-1">
-                <Text className="font-bold text-zinc-100 text-base">{workouts[0]?.title}</Text>
-                <Text className="text-sm text-zinc-400 mt-1">
-                  {workouts[0]?.exercises?.length || 0} exercícios • {workouts[0]?.duration}
-                </Text>
-              </View>
+          {workouts && workouts.length > 0 ? (
+            <Pressable
+              onPress={() => onNavigate('ClientWorkouts')}
+            >
+              <Card className="p-5 flex-row items-center gap-4 active:border-zinc-700">
+                <View className="w-16 h-16 rounded-2xl bg-zinc-950 items-center justify-center border border-zinc-800">
+                  <Play size={24} color="#a3e635" style={{ marginLeft: 3 }} />
+                </View>
+                <View className="flex-1">
+                  <Text className="font-bold text-zinc-100 text-base">{workouts[0]?.title}</Text>
+                  <Text className="text-sm text-zinc-400 mt-1">
+                    {workouts[0]?.exercises?.length || 0} exercícios • {workouts[0]?.duration}
+                  </Text>
+                </View>
+              </Card>
+            </Pressable>
+          ) : (
+            <Card className="p-5 items-center gap-3 border-dashed border-zinc-700">
+              <Text className="font-medium text-zinc-500 text-sm">Nenhum treino montado para hoje</Text>
             </Card>
-          </Pressable>
+          )}
         </View>
       </View>
     </ScrollView>

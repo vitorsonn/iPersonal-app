@@ -4,8 +4,8 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Card } from '../components/native/UI';
-import { MOCK_TRAINER } from '../mockData';
+import { Card } from '../../components/common/UI';
+import { MOCK_TRAINER } from '../../data/mockData';
 import {
   Calendar,
   CheckCircle2,
@@ -65,7 +65,7 @@ export default function ClientSuccessPage({ username, onFinish }: ClientSuccessP
         </Card>
 
         {/* Footer Subtitle */}
-        <Text className="text-xs text-zinc-550 text-center leading-relaxed px-4">
+        <Text className="text-xs text-zinc-500 text-center leading-relaxed px-4">
           Enviamos os detalhes para o seu WhatsApp e E-mail.
         </Text>
 

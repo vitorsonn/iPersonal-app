@@ -7,9 +7,10 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_TRAINER, MOCK_APPOINTMENTS } from '../mockData';
-import { Avatar, Card } from '../components/native/UI';
-import { GlowingButton } from '../components/native/AuthUI';
+import * as Clipboard from 'expo-clipboard';
+import { MOCK_TRAINER, MOCK_APPOINTMENTS } from '../../data/mockData';
+import { Avatar, Card } from '../../components/common/UI';
+import { GlowingButton } from '../../components/auth/AuthUI';
 import {
   ArrowRight,
   Calendar,
@@ -18,7 +19,7 @@ import {
   Share2,
   Users,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../services/supabase';
 
 type TrainerDashboardProps = {
   onNavigate: (screen: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments', params?: any) => void;
@@ -33,12 +34,14 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
   });
   const [activeStudentsCount, setActiveStudentsCount] = useState(24);
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
+  const [aulasHojeCount, setAulasHojeCount] = useState(0);
 
   useEffect(() => {
     async function loadData() {
       if (!isSupabaseConfigured()) {
         const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
         setTodayAppointments(mockToday);
+        setAulasHojeCount(mockToday.length);
         return;
       }
 
@@ -48,6 +51,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         if (userError || !user) {
           const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
           setTodayAppointments(mockToday);
+          setAulasHojeCount(mockToday.length);
           return;
         }
 
@@ -66,7 +70,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         if (profile) {
           setTrainer({
             name: profile.name || MOCK_TRAINER.name,
-            avatar: profile.avatar_url || MOCK_TRAINER.avatar,
+            avatar: profile.avatar_url || null,
             username: trainerData?.username || MOCK_TRAINER.username,
           });
         }
@@ -81,9 +85,15 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
           .select('student_id')
           .eq('trainer_id', user.id);
 
+        const { data: linkedStudents } = await supabase
+          .from('students')
+          .select('profile_id')
+          .eq('trainer_id', user.id);
+
         const studentIds = new Set([
           ...(workouts || []).map(w => w.student_id),
-          ...(appointments || []).map(a => a.student_id)
+          ...(appointments || []).map(a => a.student_id),
+          ...(linkedStudents || []).map(s => s.profile_id)
         ]);
         setActiveStudentsCount(studentIds.size || 0);
 
@@ -96,24 +106,80 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
             status,
             student:student_id (
               objective,
-              profile:profiles (
+              profile:profiles!students_profile_id_fkey (
                 name
               )
             )
           `)
-          .eq('trainer_id', user.id)
-          .eq('date', 'Hoje');
+          .eq('trainer_id', user.id);
 
         if (apptsData) {
-          const formatted = apptsData.map((apt: any) => ({
-            id: apt.id,
-            time: apt.time,
-            clientName: apt.student?.profile?.name || 'Aluno',
-            objective: apt.student?.objective || 'Treino',
-            status: apt.status,
-          }));
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+
+          // 1. Calculate count for "Aulas Hoje"
+          const todayAppointmentsFiltered = apptsData.filter((apt: any) => {
+            if (apt.date === 'Hoje') return true;
+            if (apt.date === 'Amanhã') return false;
+            const parts = apt.date.split('-');
+            if (parts.length === 3) {
+              const aptDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+              aptDate.setHours(0, 0, 0, 0);
+              return aptDate.getTime() === today.getTime();
+            }
+            return false;
+          });
+          setAulasHojeCount(todayAppointmentsFiltered.length);
+
+          // 2. Format and sort upcoming appointments
+          const formatted = apptsData
+            .map((apt: any) => {
+              let aptDate: Date;
+              if (apt.date === 'Hoje') {
+                aptDate = new Date();
+              } else if (apt.date === 'Amanhã') {
+                aptDate = new Date();
+                aptDate.setDate(aptDate.getDate() + 1);
+              } else {
+                const parts = apt.date.split('-');
+                if (parts.length === 3) {
+                  aptDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+                } else {
+                  aptDate = new Date(apt.date);
+                }
+              }
+              aptDate.setHours(0, 0, 0, 0);
+
+              // Pretty print date for render
+              let displayDate = apt.date;
+              if (apt.date && apt.date.includes('-')) {
+                const parts = apt.date.split('-');
+                if (parts.length === 3) {
+                  displayDate = `${parts[2]}/${parts[1]}`;
+                }
+              }
+
+              return {
+                id: apt.id,
+                time: apt.time,
+                date: displayDate,
+                dateObj: aptDate,
+                clientName: apt.student?.profile?.name || 'Aluno',
+                objective: apt.student?.objective || 'Treino',
+                status: apt.status,
+              };
+            })
+            .filter((apt: any) => apt.dateObj >= today)
+            .sort((a: any, b: any) => {
+              if (a.dateObj.getTime() !== b.dateObj.getTime()) {
+                return a.dateObj.getTime() - b.dateObj.getTime();
+              }
+              return a.time.localeCompare(b.time);
+            });
+
           setTodayAppointments(formatted);
         } else {
+          setAulasHojeCount(0);
           setTodayAppointments([]);
         }
 
@@ -125,10 +191,39 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
     }
 
     loadData();
+
+    let activeChannel: any = null;
+
+    async function setupRealtime() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      activeChannel = supabase
+        .channel(`trainer-dashboard-${user.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user.id}` }, () => {
+          loadData();
+        })
+        .subscribe();
+    }
+
+    setupRealtime();
+
+    return () => {
+      if (activeChannel) {
+        supabase.removeChannel(activeChannel);
+      }
+    };
   }, []);
 
-  const copyLink = () => {
-    Alert.alert('Link Copiado', `ipersonal.app/personal/${trainer.username}`);
+  const copyLink = async () => {
+    await Clipboard.setStringAsync(`ipersonal.app/personal/${trainer.username}`);
+    Alert.alert('Link Copiado', `O link ipersonal.app/personal/${trainer.username} foi copiado para a área de transferência.`);
   };
 
   if (loading) {
@@ -149,7 +244,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         {/* Header */}
         <View className="flex-row items-center justify-between pt-4">
           <View className="flex-row items-center gap-4">
-            <Avatar src={trainer.avatar} size="md" alt={trainer.name} />
+            <Avatar src={trainer.avatar} name={trainer.name} size="md" alt={trainer.name} />
             <View>
               <Text className="text-zinc-400 text-sm">Olá,</Text>
               <Text className="text-xl font-bold text-zinc-100">{trainer.name.split(' ')[0]}</Text>
@@ -181,7 +276,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         </View>
 
         {/* Share Link Banner */}
-        <Card className="bg-gradient-to-br from-lime-400 to-emerald-500 p-6 relative overflow-hidden">
+        <Card className="bg-lime-400 border-lime-400 p-6 relative overflow-hidden">
           <View className="gap-4 z-10">
             <View>
               <Text className="text-xl font-bold text-zinc-950">Seu link de agendamento</Text>
@@ -222,7 +317,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
               <Calendar size={20} color="#a3e635" />
             </View>
             <View>
-              <Text className="text-3xl font-bold text-zinc-100">{todayAppointments.length}</Text>
+              <Text className="text-3xl font-bold text-zinc-100">{aulasHojeCount}</Text>
               <Text className="text-sm text-zinc-400 font-medium mt-1">Aulas Hoje</Text>
             </View>
           </Card>
@@ -242,24 +337,37 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
           </View>
 
           <View className="gap-3">
-            {todayAppointments.map((apt) => (
-              <Pressable
-                key={apt.id}
-                onPress={() => onNavigate('TrainerAppointments', { appointmentId: apt.id })}
-              >
-                <Card className="p-4 flex-row items-center gap-4 active:border-zinc-700">
-                  <View className="flex-col items-center justify-center w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800">
-                    <Text className="text-lg font-bold text-lime-400">{apt.time.split(':')[0]}</Text>
-                    <Text className="text-[10px] text-zinc-500 uppercase">{apt.time.split(':')[1]}</Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="font-bold text-zinc-100">{apt.clientName}</Text>
-                    <Text className="text-sm text-zinc-400 mt-0.5">{apt.objective}</Text>
-                  </View>
-                  <View className={`w-2 h-2 rounded-full ${apt.status === 'confirmed' ? 'bg-lime-400' : 'bg-amber-400'}`} />
-                </Card>
-              </Pressable>
-            ))}
+            {todayAppointments.length > 0 ? (
+              todayAppointments.map((apt) => (
+                <Pressable
+                  key={apt.id}
+                  onPress={() => onNavigate('TrainerAppointments', { appointmentId: apt.id })}
+                >
+                  <Card className="p-4 flex-row items-center gap-4 active:border-zinc-700">
+                    <View className="flex-col items-center justify-center w-14 h-14 rounded-2xl bg-zinc-950 border border-zinc-800">
+                      <Text className="text-lg font-bold text-lime-400">{apt.time.split(':')[0]}</Text>
+                      <Text className="text-[10px] text-zinc-500 uppercase">{apt.time.split(':')[1]}</Text>
+                    </View>
+                    <View className="flex-1">
+                      <View className="flex-row items-center justify-between">
+                        <Text className="font-bold text-zinc-100">{apt.clientName}</Text>
+                        {apt.date !== 'Hoje' && (
+                          <Text className="text-[10px] font-bold text-lime-400 bg-lime-400/10 px-2 py-0.5 rounded-full">
+                            {apt.date}
+                          </Text>
+                        )}
+                      </View>
+                      <Text className="text-sm text-zinc-400 mt-0.5">{apt.objective}</Text>
+                    </View>
+                    <View className={`w-2 h-2 rounded-full ${apt.status === 'confirmed' ? 'bg-lime-400' : 'bg-amber-400'}`} />
+                  </Card>
+                </Pressable>
+              ))
+            ) : (
+              <Card className="p-5 items-center gap-3 border-dashed border-zinc-700">
+                <Text className="font-medium text-zinc-500 text-sm">Nenhum atendimento agendado</Text>
+              </Card>
+            )}
           </View>
         </View>
       </View>

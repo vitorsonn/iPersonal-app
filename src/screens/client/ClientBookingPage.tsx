@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Alert,
   Pressable,
   ScrollView,
   Text,
   View,
+  ActivityIndicator,
 } from 'react-native';
-import { MOCK_TRAINER } from '../mockData';
-import { Avatar, Card, Input, Label } from '../components/native/UI';
-import { GlowingButton } from '../components/native/AuthUI';
+import { MOCK_TRAINER } from '../../data/mockData';
+import { Avatar, Card, Input, Label } from '../../components/common/UI';
+import { GlowingButton } from '../../components/auth/AuthUI';
 import {
   Award,
   Calendar,
@@ -17,6 +18,45 @@ import {
   Clock,
   Star,
 } from 'lucide-react-native';
+import { supabase, isSupabaseConfigured } from '../../services/supabase';
+
+const getFriendlyDate = (dateStr: string) => {
+  if (!dateStr) return '';
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const day = parseInt(parts[2], 10);
+    
+    const date = new Date(year, month, day);
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+    
+    const isToday = today.getFullYear() === date.getFullYear() && today.getMonth() === date.getMonth() && today.getDate() === date.getDate();
+    const isTomorrow = tomorrow.getFullYear() === date.getFullYear() && tomorrow.getMonth() === date.getMonth() && tomorrow.getDate() === date.getDate();
+    
+    const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+    const weekdayName = weekdays[date.getDay()];
+    const formattedDate = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}`;
+    
+    if (isToday) return `Hoje (${formattedDate})`;
+    if (isTomorrow) return `Amanhã (${formattedDate})`;
+    return `${weekdayName}, ${formattedDate}`;
+  } catch (e) {
+    return dateStr;
+  }
+};
+
+const formatTime = (timeStr: string) => {
+  if (!timeStr) return '';
+  const parts = timeStr.split(':');
+  if (parts.length >= 2) {
+    return `${parts[0]}:${parts[1]}`;
+  }
+  return timeStr;
+};
 
 type ClientBookingPageProps = {
   username?: string;
@@ -25,6 +65,7 @@ type ClientBookingPageProps = {
 };
 
 export default function ClientBookingPage({ username, onNavigate, onGoBack }: ClientBookingPageProps) {
+  const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
   const [step, setStep] = useState<'profile' | 'form'>('profile');
 
@@ -33,7 +74,94 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
   const [email, setEmail] = useState('');
   const [objective, setObjective] = useState('');
 
-  const trainer = MOCK_TRAINER;
+  const [trainer, setTrainer] = useState({
+    name: MOCK_TRAINER.name,
+    avatar: MOCK_TRAINER.avatar,
+    role: MOCK_TRAINER.role,
+    bio: MOCK_TRAINER.bio,
+    specialties: MOCK_TRAINER.specialties,
+    certifications: MOCK_TRAINER.certifications,
+    availableSlots: MOCK_TRAINER.availableSlots,
+    username: MOCK_TRAINER.username,
+  });
+
+  useEffect(() => {
+    async function loadTrainer() {
+      if (!isSupabaseConfigured() || !username) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        // 1. Fetch trainer data by username
+        const { data: trainerData, error: tError } = await supabase
+          .from('trainers')
+          .select(`
+            profile_id,
+            username,
+            bio,
+            specialties,
+            certifications,
+            profile:profiles (
+              name,
+              avatar_url
+            )
+          `)
+          .eq('username', username)
+          .single();
+
+        if (tError || !trainerData) return;
+
+        const tProfile = Array.isArray(trainerData.profile) ? trainerData.profile[0] : trainerData.profile;
+
+        // 2. Fetch available slots for this trainer
+        const { data: slotsData } = await supabase
+          .from('available_slots')
+          .select('*')
+          .eq('trainer_id', trainerData.profile_id);
+
+        const defaultSlots = [
+          { id: '1', date: '2026-06-15', time: '08:00' },
+          { id: '2', date: '2026-06-15', time: '10:00' },
+          { id: '3', date: '2026-06-16', time: '14:00' },
+          { id: '4', date: '2026-06-16', time: '16:00' },
+        ];
+
+        const formattedSlots = slotsData && slotsData.length > 0
+          ? slotsData.map((s: any) => ({
+              id: s.id,
+              date: s.date,
+              time: s.time,
+            }))
+          : defaultSlots;
+
+        setTrainer({
+          name: tProfile?.name || MOCK_TRAINER.name,
+          avatar: tProfile?.avatar_url || MOCK_TRAINER.avatar,
+          role: 'Personal Trainer',
+          bio: trainerData.bio || 'Especialista em saúde e boa forma.',
+          specialties: trainerData.specialties || ['Hipertrofia'],
+          certifications: trainerData.certifications || [],
+          availableSlots: formattedSlots,
+          username: trainerData.username,
+        });
+      } catch (err) {
+        console.error('Error loading trainer for booking:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadTrainer();
+  }, [username]);
+
+  if (loading) {
+    return (
+      <View className="flex-1 bg-zinc-950 items-center justify-center">
+        <ActivityIndicator size="large" color="#a3e635" />
+      </View>
+    );
+  }
 
   const handleObjectivePress = () => {
     Alert.alert(
@@ -87,7 +215,7 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
                 <View className="flex-row flex-wrap items-center mt-1 gap-1">
                   <Text className="text-zinc-400 text-sm">Preencha para confirmar o agendamento em </Text>
                   <Text className="text-lime-400 font-bold text-sm">
-                    {selectedSlotData.date === '2026-06-15' ? 'Segunda' : 'Terça'} às {selectedSlotData.time}
+                    {getFriendlyDate(selectedSlotData.date)} às {formatTime(selectedSlotData.time)}
                   </Text>
                 </View>
               )}
@@ -153,7 +281,7 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
           {/* Back button */}
           <Pressable
             onPress={onGoBack}
-            className="absolute top-12 left-6 w-10 h-10 rounded-full bg-zinc-950/80 items-center justify-center border border-zinc-850 z-25"
+            className="absolute top-12 left-6 w-10 h-10 rounded-full bg-zinc-950/80 items-center justify-center border border-zinc-800 z-25"
           >
             <ChevronLeft size={20} color="#e4e4e7" />
           </Pressable>
@@ -162,7 +290,7 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
         {/* Profile Card Overlay */}
         <View className="px-6 -mt-16 relative z-10 gap-6">
           <View className="items-center gap-3">
-            <Avatar src={trainer.avatar} size="xl" className="ring-4 ring-zinc-950 shadow-xl" />
+            <Avatar src={trainer.avatar} name={trainer.name} size="xl" className="ring-4 ring-zinc-950 shadow-xl" />
             <View className="items-center">
               <Text className="text-2xl font-bold text-zinc-100 tracking-tight">{trainer.name}</Text>
               <Text className="text-lime-400 font-semibold text-sm mt-0.5">{trainer.role}</Text>
@@ -211,8 +339,8 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
                 <Calendar size={20} color="#a3e635" />
                 <Text className="text-lg font-bold text-zinc-100">Horários Livres</Text>
               </View>
-              <View className="px-2.5 py-1 bg-zinc-900 rounded-md border border-zinc-850">
-                <Text className="text-[10px] text-zinc-500 font-semibold uppercase">Jun 15 - 16</Text>
+              <View className="px-2.5 py-1 bg-zinc-900 rounded-md border border-zinc-800">
+                <Text className="text-[10px] text-zinc-500 font-semibold uppercase">Próximos dias</Text>
               </View>
             </View>
 
@@ -230,12 +358,12 @@ export default function ClientBookingPage({ username, onNavigate, onGoBack }: Cl
                     }`}
                   >
                     <Text className={`text-[10px] uppercase font-bold tracking-wider mb-1 ${isSelected ? 'text-lime-400' : 'text-zinc-500'}`}>
-                      {slot.date === '2026-06-15' ? 'Segunda' : 'Terça'}
+                      {getFriendlyDate(slot.date)}
                     </Text>
                     <View className="flex-row items-center gap-1.5 mt-1">
                       <Clock size={14} color={isSelected ? '#a3e635' : '#e4e4e7'} />
                       <Text className={`font-semibold text-base ${isSelected ? 'text-lime-400' : 'text-zinc-200'}`}>
-                        {slot.time}
+                        {formatTime(slot.time)}
                       </Text>
                     </View>
                   </Pressable>

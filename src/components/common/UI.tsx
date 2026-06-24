@@ -7,7 +7,7 @@ import {
   View,
   ViewProps,
 } from 'react-native';
-import { cn } from './AuthUI';
+import { cn } from '../auth/AuthUI';
 
 export function Card({ className, ...props }: ViewProps & { className?: string }) {
   return (
@@ -61,11 +61,13 @@ export type AvatarSize = 'sm' | 'md' | 'lg' | 'xl';
 
 export function Avatar({
   src,
+  name,
   alt,
   size = 'md',
   className,
 }: {
-  src: string;
+  src?: string | null;
+  name?: string;
   alt?: string;
   size?: AvatarSize;
   className?: string;
@@ -77,15 +79,51 @@ export function Avatar({
     xl: 'w-24 h-24',
   };
 
+  const textSizes = {
+    sm: 'text-xs',
+    md: 'text-sm',
+    lg: 'text-base',
+    xl: 'text-2xl',
+  };
+
+  const getInitials = (fullName?: string) => {
+    if (!fullName) return '?';
+    const parts = fullName.trim().split(' ').filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) {
+      const part = parts[0];
+      return part.slice(0, Math.min(2, part.length)).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  const hasImage = src && src.trim() !== '';
+
+  if (hasImage) {
+    return (
+      <Image
+        source={{ uri: src }}
+        className={cn(
+          'rounded-full bg-zinc-800 border-2 border-zinc-800',
+          sizeClasses[size],
+          className
+        )}
+        accessibilityLabel={alt || name}
+      />
+    );
+  }
+
   return (
-    <Image
-      source={{ uri: src }}
+    <View
       className={cn(
-        'rounded-full bg-zinc-800 border-2 border-zinc-800',
+        'rounded-full bg-zinc-800 border-2 border-zinc-700 items-center justify-center',
         sizeClasses[size],
         className
       )}
-      accessibilityLabel={alt}
-    />
+    >
+      <Text className={cn('text-zinc-300 font-bold', textSizes[size])}>
+        {getInitials(name || alt)}
+      </Text>
+    </View>
   );
 }

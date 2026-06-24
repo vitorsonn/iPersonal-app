@@ -16,12 +16,13 @@ import {
   GlowingButton,
   RoleTabs,
   TextLink,
-} from '../components/native/AuthUI';
+} from '../../components/auth/AuthUI';
 
 type LoginProps = {
   onForgotPassword?: () => void;
   onLogin?: (email: string, password: string, role: AuthRole) => void;
   onRegister?: (name: string, email: string, password: string, role: AuthRole) => void;
+  pendingTrainerUsername?: string | null;
 };
 
 const credentialsByRole: Record<AuthRole, { email: string; password: string }> = {
@@ -35,7 +36,7 @@ const credentialsByRole: Record<AuthRole, { email: string; password: string }> =
   },
 };
 
-export default function Login({ onForgotPassword, onLogin, onRegister }: LoginProps) {
+export default function Login({ onForgotPassword, onLogin, onRegister, pendingTrainerUsername }: LoginProps) {
   const [role, setRole] = useState<AuthRole>('trainer');
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
@@ -98,6 +99,15 @@ export default function Login({ onForgotPassword, onLogin, onRegister }: LoginPr
           <AuthBrand />
 
           <RoleTabs value={role} onChange={handleRoleChange} />
+
+          {pendingTrainerUsername && role === 'student' && (
+            <View className="bg-lime-400/10 border border-lime-400/20 rounded-2xl p-4 flex-row items-center gap-3">
+              <View className="w-2 h-2 rounded-full bg-lime-400" />
+              <Text className="text-lime-400 text-xs font-semibold flex-1">
+                Você será vinculado ao Personal Trainer: @{pendingTrainerUsername}
+              </Text>
+            </View>
+          )}
 
           <View key={role} className="gap-6">
             {isRegistering && (

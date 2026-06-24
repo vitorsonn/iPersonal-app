@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Dumbbell, User } from 'lucide-react-native';
 import ClientDashboard from './ClientDashboard';
 import ClientWorkouts from './ClientWorkouts';
@@ -20,6 +21,7 @@ export default function ClientLayout({
   onNavigate,
   onLogout,
 }: ClientLayoutProps) {
+  const insets = useSafeAreaInsets();
   const navItems = [
     { id: 'dashboard' as const, icon: Home, label: 'Início' },
     { id: 'workouts' as const, icon: Dumbbell, label: 'Treinos' },
@@ -47,7 +49,10 @@ export default function ClientLayout({
       </View>
 
       {/* Tab bar navigation */}
-      <View className="absolute bottom-0 left-0 right-0 h-22 bg-zinc-950 border-t border-zinc-900 px-6 flex-row items-center justify-around pb-6">
+      <View 
+        style={{ paddingBottom: Math.max(insets.bottom, 16) }}
+        className="absolute bottom-0 left-0 right-0 bg-zinc-950 border-t border-zinc-900 px-6 flex-row items-center justify-around pt-3"
+      >
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const Icon = item.icon;
@@ -56,7 +61,7 @@ export default function ClientLayout({
             <Pressable
               key={item.id}
               onPress={() => setActiveTab(item.id)}
-              className="items-center justify-center flex-col gap-1 p-2 flex-1"
+              className="items-center justify-center flex-col gap-1 p-2 flex-1 active:opacity-75"
             >
               <Icon
                 size={22}
@@ -67,7 +72,7 @@ export default function ClientLayout({
                 {item.label}
               </Text>
               {isActive && (
-                <View className="absolute bottom-0 w-1 h-1 rounded-full bg-lime-400" />
+                <View className="absolute bottom-0 w-1.5 h-1.5 rounded-full bg-lime-400" />
               )}
             </Pressable>
           );
