@@ -5,7 +5,7 @@ import {
   View,
 } from 'react-native';
 import { Card } from '../../components/common/UI';
-import { MOCK_TRAINER } from '../../data/mockData';
+
 import {
   Calendar,
   CheckCircle2,
@@ -19,7 +19,7 @@ type ClientSuccessPageProps = {
 };
 
 export default function ClientSuccessPage({ username, onFinish }: ClientSuccessPageProps) {
-  const trainer = MOCK_TRAINER;
+  const trainer: any = {};
 
   return (
     <View className="flex-1 bg-zinc-950 items-center justify-center p-6">

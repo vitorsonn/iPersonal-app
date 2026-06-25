@@ -12,7 +12,7 @@ import ClientSuccessPage from './src/screens/client/ClientSuccessPage';
 import ClientWorkoutSuccessPage from './src/screens/client/ClientWorkoutSuccessPage';
 import NotificationsScreen from './src/screens/shared/NotificationsScreen';
 import { AuthRole } from './src/components/auth/AuthUI';
-import { supabase, isSupabaseConfigured } from './src/services/supabase';
+import { supabase, isSupabaseConfigured } from './src/config/supabase';
 import { ToastProvider } from './src/components/common/Toast';
 
 type TabType = 'dashboard' | 'agenda' | 'appointments' | 'profile';
@@ -43,7 +43,7 @@ export default function App() {
         .single();
 
       if (tError || !trainerData) {
-        console.warn('Personal não encontrado para vínculo:', trainerUsername);
+
         return;
       }
 
@@ -75,17 +75,17 @@ export default function App() {
         ]
       );
     } catch (err) {
-      console.error('Erro ao processar vínculo pendente:', err);
+
     }
   };
 
   const parseAndApplyUrl = async (url: string, currentSession: any) => {
-    console.log('Incoming deep link URL:', url);
+
     const regex = /(?:personal\/|invite\?personal=)([^/?#]+)/i;
     const match = url.match(regex);
     if (match && match[1]) {
       const username = match[1];
-      console.log('Parsed trainer username:', username);
+
       
       const loggedInUserId = currentSession?.user?.id;
       if (loggedInUserId) {
@@ -102,7 +102,7 @@ export default function App() {
             Alert.alert('Aviso', 'Você está conectado com uma conta de Personal Trainer. Apenas contas do tipo Aluno podem se vincular a um Personal.');
           }
         } catch (err) {
-          console.error('Erro ao verificar cargo do usuário:', err);
+
         }
       } else {
         setPendingTrainerUsername(username);
@@ -278,7 +278,7 @@ export default function App() {
               trainerId = trainerData.profile_id;
             }
           } catch (err) {
-            console.error('Erro ao buscar personal para vinculo no registro:', err);
+
           }
         }
 

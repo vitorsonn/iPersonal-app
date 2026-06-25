@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_TRAINER, MOCK_CLIENT, MOCK_APPOINTMENTS } from '../../data/mockData';
+
 import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import {
@@ -18,7 +18,7 @@ import {
   Clock,
   Star,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { rescheduleAppointment } from '../../services/appointments';
 
 const getFriendlyDate = (dateStr: string) => {
@@ -78,14 +78,14 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
   const [objective, setObjective] = useState('');
 
   const [trainer, setTrainer] = useState({
-    name: MOCK_TRAINER.name,
-    avatar: MOCK_TRAINER.avatar,
-    role: MOCK_TRAINER.role,
-    bio: MOCK_TRAINER.bio,
-    specialties: MOCK_TRAINER.specialties,
-    certifications: MOCK_TRAINER.certifications,
-    availableSlots: MOCK_TRAINER.availableSlots,
-    username: MOCK_TRAINER.username,
+    name: '',
+    avatar: '',
+    role: '',
+    bio: '',
+    specialties: [],
+    certifications: [],
+    availableSlots: [],
+    username: '',
   });
 
   useEffect(() => {
@@ -140,8 +140,8 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
           : defaultSlots.map(s => ({ ...s, trainer_id: trainerData.profile_id }));
 
         setTrainer({
-          name: tProfile?.name || MOCK_TRAINER.name,
-          avatar: tProfile?.avatar_url || MOCK_TRAINER.avatar,
+          name: tProfile?.name || '',
+          avatar: tProfile?.avatar_url || '',
           role: 'Personal Trainer',
           bio: trainerData.bio || 'Especialista em saúde e boa forma.',
           specialties: trainerData.specialties || ['Hipertrofia'],
@@ -150,7 +150,7 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
           username: trainerData.username,
         });
       } catch (err) {
-        console.error('Error loading trainer for booking:', err);
+
       } finally {
         setLoading(false);
       }
@@ -194,13 +194,13 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
         );
       } else {
         // Mock mode: update existing appointment in-place (no duplication)
-        const mockApt = MOCK_APPOINTMENTS.find((a: any) => a.id === appointmentId);
+        const mockApt = [].find((a: any) => a.id === appointmentId);
         if (mockApt) {
           mockApt.date = selectedSlotData.date;
           mockApt.time = selectedSlotData.time;
           mockApt.status = 'pending';
         }
-        const mockClass = MOCK_CLIENT.upcomingClasses.find((c: any) => c.id === appointmentId);
+        const mockClass = [].find((c: any) => c.id === appointmentId);
         if (mockClass) {
           mockClass.date = selectedSlotData.date;
           mockClass.time = selectedSlotData.time;
@@ -209,7 +209,7 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
       }
       onNavigate('ClientSuccess', { username });
     } catch (err: any) {
-      console.error('Error rescheduling appointment:', err);
+
       Alert.alert('Erro', 'Houve um erro ao reagendar: ' + err.message);
     }
   };
@@ -274,7 +274,7 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
           .eq('id', selectedSlotData.id);
 
         if (slotError) {
-          console.warn('Could not mark slot as booked:', slotError.message);
+
         }
 
         if (newApt) {
@@ -286,12 +286,12 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
               selectedSlotData.date,
               selectedSlotData.time,
               newApt.id
-            ).catch(err => console.error('Error creating appointment notification:', err));
+);
           });
         }
 
       } catch (err: any) {
-        console.error('Error confirming booking in DB:', err);
+
         Alert.alert('Erro', 'Houve um erro ao salvar o agendamento no servidor: ' + err.message);
         return;
       }
@@ -300,28 +300,28 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
       const newAptId = `mock-a-${Date.now()}`;
       
       // Remove old pending/scheduled appointments from mock lists
-      const oldAptsIdxs = MOCK_APPOINTMENTS.map((a, i) => 
-        (a.clientName === MOCK_CLIENT.name && (a.status === 'pending' || a.status === 'scheduled' || a.status === 'PENDENTE')) ? i : -1
+      const oldAptsIdxs = [].map((a, i) => 
+        (a.clientName === '' && (a.status === 'pending' || a.status === 'scheduled' || a.status === 'PENDENTE')) ? i : -1
       ).filter(i => i !== -1);
       
       for (let i = oldAptsIdxs.length - 1; i >= 0; i--) {
-        MOCK_APPOINTMENTS.splice(oldAptsIdxs[i], 1);
+        [].splice(oldAptsIdxs[i], 1);
       }
 
-      MOCK_CLIENT.upcomingClasses = MOCK_CLIENT.upcomingClasses.filter(c => 
+      [] = [].filter(c => 
         c.status !== 'pending' && c.status !== 'scheduled' && c.status !== 'PENDENTE'
       );
 
-      MOCK_APPOINTMENTS.push({
+      [].push({
         id: newAptId,
-        clientName: MOCK_CLIENT.name,
+        clientName: '',
         date: selectedSlotData.date,
         time: selectedSlotData.time,
         status: 'pending',
         objective: objective,
       });
 
-      MOCK_CLIENT.upcomingClasses.unshift({
+      [].unshift({
         id: newAptId,
         date: selectedSlotData.date,
         time: selectedSlotData.time,

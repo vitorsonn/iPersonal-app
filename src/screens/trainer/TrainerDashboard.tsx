@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { MOCK_TRAINER, MOCK_APPOINTMENTS } from '../../data/mockData';
+
 import { Avatar, Card } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import {
@@ -19,7 +19,7 @@ import {
   Share2,
   Users,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
 import { getUserNotifications, subscribeToNotifications, Notification } from '../../services/notificationService';
 import { Bell } from 'lucide-react-native';
@@ -31,9 +31,9 @@ type TrainerDashboardProps = {
 export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) {
   const [loading, setLoading] = useState(false);
   const [trainer, setTrainer] = useState({
-    name: MOCK_TRAINER.name,
-    avatar: MOCK_TRAINER.avatar,
-    username: MOCK_TRAINER.username,
+    name: '',
+    avatar: '',
+    username: '',
   });
   const [activeStudentsCount, setActiveStudentsCount] = useState(24);
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
@@ -44,7 +44,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
   useEffect(() => {
     async function loadData() {
       if (!isSupabaseConfigured()) {
-        const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
+        const mockToday = [].filter(a => a.date === 'Hoje');
         setTodayAppointments(mockToday);
         setAulasHojeCount(mockToday.length);
         return;
@@ -54,7 +54,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         setLoading(true);
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
-          const mockToday = MOCK_APPOINTMENTS.filter(a => a.date === 'Hoje');
+          const mockToday = [].filter(a => a.date === 'Hoje');
           setTodayAppointments(mockToday);
           setAulasHojeCount(mockToday.length);
           return;
@@ -78,9 +78,9 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
 
         if (profile) {
           setTrainer({
-            name: profile.name || MOCK_TRAINER.name,
+            name: profile.name || '',
             avatar: profile.avatar_url || null,
-            username: trainerData?.username || MOCK_TRAINER.username,
+            username: trainerData?.username || '',
           });
         }
 
@@ -193,7 +193,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         }
 
       } catch (err) {
-        console.error('Error loading trainer dashboard:', err);
+
       } finally {
         setLoading(false);
       }

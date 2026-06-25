@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Card } from '../../components/common/UI';
-import { MOCK_APPOINTMENTS, MOCK_STUDENTS } from '../../data/mockData';
+
 import {
   CalendarDays,
   CheckCircle2,
@@ -19,7 +19,7 @@ import {
   Search,
   XCircle,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
 
 const objectiveColors: Record<string, string> = {
@@ -43,8 +43,8 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
 
   const loadData = async () => {
     if (!isSupabaseConfigured()) {
-      setStudents(MOCK_STUDENTS);
-      setAppointments(MOCK_APPOINTMENTS);
+      setStudents([]);
+      setAppointments([]);
       return;
     }
 
@@ -193,7 +193,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
       setAppointments(formattedAppts);
 
     } catch (err) {
-      console.error('Error loading appointments screen data:', err);
+
     } finally {
       setLoading(false);
     }
@@ -248,9 +248,9 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
 
   const handleAcceptAppointment = async (aptId: string, clientName: string) => {
     if (!isSupabaseConfigured()) {
-      const idx = MOCK_APPOINTMENTS.findIndex(a => a.id === aptId);
+      const idx = [].findIndex(a => a.id === aptId);
       if (idx !== -1) {
-        MOCK_APPOINTMENTS[idx].status = 'scheduled';
+        (appointments as any)[idx].status = 'scheduled';
       }
       Alert.alert('Sucesso', `Agendamento de ${clientName} aceito!`);
       loadData();
@@ -273,9 +273,9 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
 
   const handleDeclineAppointment = async (aptId: string, clientName: string) => {
     if (!isSupabaseConfigured()) {
-      const idx = MOCK_APPOINTMENTS.findIndex(a => a.id === aptId);
+      const idx = [].findIndex(a => a.id === aptId);
       if (idx !== -1) {
-        MOCK_APPOINTMENTS.splice(idx, 1);
+        [].splice(idx, 1);
       }
       Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
       loadData();

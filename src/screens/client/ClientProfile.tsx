@@ -7,11 +7,11 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_CLIENT } from '../../data/mockData';
+
 import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import { HeartPulse, LogOut, Ruler, Settings } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 
 type ClientProfileProps = {
   onLogout: () => void;
@@ -28,9 +28,9 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
   useEffect(() => {
     async function loadProfile() {
       if (!isSupabaseConfigured()) {
-        setName(MOCK_CLIENT.name);
-        setObjective(MOCK_CLIENT.objective);
-        setAvatar(MOCK_CLIENT.avatar);
+        setName('');
+        setObjective('');
+        setAvatar('');
         setWeight('68');
         setHeight('1.65');
         return;
@@ -62,7 +62,7 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
           setHeight(studentData.height ? String(studentData.height) : '');
         }
       } catch (err) {
-        console.error('Error loading client profile:', err);
+
       } finally {
         setLoading(false);
       }

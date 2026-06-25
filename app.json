@@ -3,7 +3,17 @@
     "name": "iPersonal",
     "slug": "ipersonal",
     "scheme": "ipersonal",
+    "version": "1.0.0",
     "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.vitorsonn.ipersonal",
+      "adaptiveIcon": {
+        "backgroundColor": "#121212"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.vitorsonn.ipersonal"
+    },
     "web": {
       "bundler": "metro"
     }

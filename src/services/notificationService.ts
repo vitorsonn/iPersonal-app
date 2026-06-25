@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from '../config/supabase';
 
 export type NotificationType =
   | 'APPOINTMENT_CREATED'
@@ -35,7 +35,6 @@ export async function createNotification(
   });
 
   if (error) {
-    console.error('Error creating notification:', error);
     throw error;
   }
 }
@@ -133,7 +132,6 @@ export async function getUserNotifications(userId: string): Promise<Notification
     .order('created_at', { ascending: false });
 
   if (error) {
-    console.error('Error fetching notifications:', error);
     throw error;
   }
 
@@ -147,7 +145,6 @@ export async function markAsRead(notificationId: string): Promise<void> {
     .eq('id', notificationId);
 
   if (error) {
-    console.error('Error marking notification as read:', error);
     throw error;
   }
 }

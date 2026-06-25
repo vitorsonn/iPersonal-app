@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Card, Input } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
-import { MOCK_STUDENTS, MOCK_CLIENT, MOCK_APPOINTMENTS } from '../../data/mockData';
+
 import {
   Calendar,
   Check,
@@ -18,7 +18,7 @@ import {
   Plus,
   Clock,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 
 const WORKOUT_TEMPLATES = [
   { id: 't1', name: 'Treino A - Peito e Tríceps', type: 'Hipertrofia', duration: '45 min', color: 'bg-blue-500/10 text-blue-400' },
@@ -76,7 +76,7 @@ type TrainerAssignWorkoutProps = {
 export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: TrainerAssignWorkoutProps) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
-  const [studentsList, setStudentsList] = useState<any[]>(MOCK_STUDENTS);
+  const [studentsList, setStudentsList] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState<any | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<typeof WORKOUT_TEMPLATES[0] | null>(null);
 
@@ -147,8 +147,8 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
   useEffect(() => {
     async function loadStudents() {
       if (!isSupabaseConfigured()) {
-        setStudentsList(MOCK_STUDENTS);
-        const initialStudent = MOCK_STUDENTS.find(s => s.id === studentId);
+        setStudentsList([]);
+        const initialStudent = [].find(s => s.id === studentId);
         if (initialStudent) {
           setSelectedStudent(initialStudent);
         }
@@ -196,7 +196,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
           }
         }
       } catch (err) {
-        console.error('Error loading students in assign workout:', err);
+
       } finally {
         setLoading(false);
       }
@@ -233,9 +233,9 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
         }
       }
 
-      // Create new appointment in MOCK_APPOINTMENTS
+      // Create new appointment in []
       const newAptId = `mock-a-${Date.now()}`;
-      MOCK_APPOINTMENTS.push({
+      [].push({
         id: newAptId,
         clientName: selectedStudent.name,
         date: displayDate,
@@ -245,14 +245,14 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
       });
 
       // Update mock student's next class description
-      const mockStudent = MOCK_STUDENTS.find(s => s.id === selectedStudent.id);
+      const mockStudent = [].find(s => s.id === selectedStudent.id);
       if (mockStudent) {
         mockStudent.nextClass = `${displayDate}, ${timeStr}`;
       }
 
       // If the selected student matches the mock client, add it to client's dashboard upcomingClasses and workouts list
-      if (selectedStudent.name === MOCK_CLIENT.name) {
-        MOCK_CLIENT.upcomingClasses.unshift({
+      if (selectedStudent.name === '') {
+        [].unshift({
           id: newAptId,
           date: displayDate,
           time: timeStr,
@@ -263,7 +263,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
         // Add to client's workouts
         const newWId = `mock-w-${Date.now()}`;
         const templateExercises = getExercisesForTemplate(selectedTemplate.id);
-        MOCK_CLIENT.workouts.unshift({
+        [].unshift({
           id: newWId,
           title: selectedTemplate.name,
           duration: selectedTemplate.duration,
@@ -343,7 +343,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
         });
 
       if (aptError) {
-        console.warn('Could not schedule appointment, but workout was created:', aptError.message);
+
       }
 
       Alert.alert(
@@ -357,7 +357,7 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
         ]
       );
     } catch (err: any) {
-      console.error('Error assigning workout:', err);
+
       Alert.alert('Erro', 'Houve um erro ao atribuir o treino: ' + err.message);
     } finally {
       setLoading(false);

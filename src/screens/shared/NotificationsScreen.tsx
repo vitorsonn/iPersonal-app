@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { ChevronLeft, Bell, BellDot, Check } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { getUserNotifications, markAsRead, subscribeToNotifications, Notification } from '../../services/notificationService';
 import { Card } from '../../components/common/UI';
 
@@ -33,7 +33,6 @@ export default function NotificationsScreen({ onGoBack }: NotificationsScreenPro
           });
         }
       } catch (err) {
-        console.error('Error loading notifications:', err);
       } finally {
         setLoading(false);
       }
@@ -56,7 +55,6 @@ export default function NotificationsScreen({ onGoBack }: NotificationsScreenPro
           prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
         );
       } catch (error) {
-        console.error('Error marking as read:', error);
       }
     }
   };

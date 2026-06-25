@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase } from '../config/supabase';
 
 export type AppointmentStatus =
   | 'AGUARDANDO'
@@ -119,7 +119,7 @@ export async function markAsNoShow(appointmentId: string): Promise<void> {
         apt.trainer_id,
         studentName,
         appointmentId
-      ).catch(err => console.error('Error creating no-show notification:', err));
+);
     });
   }
 }
@@ -229,7 +229,6 @@ export async function getNextAppointment(studentId: string): Promise<any | null>
           await markAsNoShow(apt.id);
           apt.status = 'no_show';
         } catch (err) {
-          console.error(`Failed to auto-mark appointment ${apt.id} as NO_SHOW:`, err);
         }
       }
     } else if (statusMapped === 'CHECKED_IN') {
@@ -241,7 +240,6 @@ export async function getNextAppointment(studentId: string): Promise<any | null>
           await markAsCompleted(apt.id);
           apt.status = 'completed';
         } catch (err) {
-          console.error(`Failed to auto-mark appointment ${apt.id} as CONCLUIDA:`, err);
         }
       }
     }
@@ -339,7 +337,6 @@ export async function rescheduleAppointment(
     .eq('id', newSlotId);
 
   if (slotError) {
-    console.warn('Could not mark new slot as booked:', slotError.message);
   }
 
   // 5. Create notification
@@ -355,7 +352,7 @@ export async function rescheduleAppointment(
         newDate,
         newTime,
         appointmentId
-      ).catch(err => console.error('Error creating reschedule notification:', err));
+);
     });
   }
 }

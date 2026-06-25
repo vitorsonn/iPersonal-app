@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_CLIENT } from '../../data/mockData';
+
 import { Avatar, Card } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import {
@@ -20,7 +20,7 @@ import {
   Clock,
   Bell,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import {
   getNextAppointment,
   checkInAppointment,
@@ -50,16 +50,16 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
 
   const [loading, setLoading] = useState(false);
   const [client, setClient] = useState({
-    name: MOCK_CLIENT.name,
-    avatar: MOCK_CLIENT.avatar,
-    streak: MOCK_CLIENT.stats.streak,
-    workoutsCompleted: MOCK_CLIENT.stats.workoutsCompleted,
+    name: '',
+    avatar: '',
+    streak: 0,
+    workoutsCompleted: 0,
     trainer: {
-      name: MOCK_CLIENT.trainer.name,
-      username: MOCK_CLIENT.trainer.username,
+      name: '',
+      username: '',
     },
-    upcomingClasses: MOCK_CLIENT.upcomingClasses,
-    workouts: MOCK_CLIENT.workouts,
+    upcomingClasses: [],
+    workouts: [],
   });
 
   const getCheckInStatus = (dateStr: string, timeStr: string, status: string) => {
@@ -124,7 +124,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
             .eq('time', apt.time);
         }
       } catch (err) {
-        console.error('Error auto-setting no-show:', err);
+
       }
     }
     
@@ -144,7 +144,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       Alert.alert('Sucesso 🎉', 'Seu check-in foi realizado com sucesso! Presença confirmada.');
       await loadData();
     } catch (err) {
-      console.error('Error confirming check-in:', err);
+
       Alert.alert('Erro', 'Não foi possível confirmar o check-in no servidor.');
     }
   };
@@ -162,7 +162,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
           'Você só pode finalizar uma aula no horário agendado ou após ele ter começado. Por enquanto, se precisar, você pode apenas reagendar.'
         );
       } else {
-        console.error('Error finishing workout:', err);
+
         Alert.alert('Erro', 'Não foi possível finalizar o treino no servidor.');
       }
     }
@@ -231,8 +231,8 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       setUnreadCount(notifs.filter(n => !n.read).length);
 
       let trainerInfo = {
-        name: MOCK_CLIENT.trainer.name,
-        username: MOCK_CLIENT.trainer.username,
+        name: '',
+        username: '',
       };
 
       if (studentData.trainer_id) {
@@ -251,8 +251,8 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
         if (linkedTrainer) {
           const tProfile = Array.isArray(linkedTrainer.profile) ? linkedTrainer.profile[0] : linkedTrainer.profile;
           trainerInfo = {
-            name: tProfile?.name || MOCK_CLIENT.trainer.name,
-            username: linkedTrainer.username || MOCK_CLIENT.trainer.username,
+            name: tProfile?.name || '',
+            username: linkedTrainer.username || '',
           };
         }
       } else if (nextApt && nextApt.trainer) {
@@ -262,8 +262,8 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
           : (Array.isArray(trainerObj.profile) ? trainerObj.profile[0] : trainerObj.profile);
         const tUsername = Array.isArray(trainerObj) ? trainerObj[0]?.username : trainerObj.username;
         trainerInfo = {
-          name: tProfile?.name || MOCK_CLIENT.trainer.name,
-          username: tUsername || MOCK_CLIENT.trainer.username,
+          name: tProfile?.name || '',
+          username: tUsername || '',
         };
       } else {
         const { data: firstTrainer } = await supabase
@@ -280,8 +280,8 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
           const trainerObj = firstTrainer as any;
           const tProfile = Array.isArray(trainerObj.profile) ? trainerObj.profile[0] : trainerObj.profile;
           trainerInfo = {
-            name: tProfile?.name || MOCK_CLIENT.trainer.name,
-            username: trainerObj.username || MOCK_CLIENT.trainer.username,
+            name: tProfile?.name || '',
+            username: trainerObj.username || '',
           };
         }
       }
@@ -325,7 +325,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       const studentProfile = studentData.profile as any;
 
       setClient({
-        name: studentProfile?.name || MOCK_CLIENT.name,
+        name: studentProfile?.name || '',
         avatar: studentProfile?.avatar_url || null,
         streak: studentData.streak ?? 0,
         workoutsCompleted: studentData.workouts_completed ?? 0,
@@ -335,7 +335,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       });
 
     } catch (err) {
-      console.error('Error loading client dashboard data:', err);
+
     } finally {
       setLoading(false);
     }

@@ -10,7 +10,7 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
-import { MOCK_APPOINTMENTS } from '../../data/mockData';
+
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,7 +18,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
 import { useToast } from '../../components/common/Toast';
 
@@ -52,7 +52,7 @@ export default function TrainerAgenda() {
           setStandardHours(JSON.parse(stored));
         }
       } catch (e) {
-        console.error('Error loading standard hours:', e);
+
       }
     }
     loadStoredHours();
@@ -63,7 +63,7 @@ export default function TrainerAgenda() {
       setStandardHours(updated);
       await SecureStore.setItemAsync('trainer_standard_hours', JSON.stringify(updated));
     } catch (e) {
-      console.error('Error saving standard hours:', e);
+
     }
   };
 
@@ -212,7 +212,7 @@ export default function TrainerAgenda() {
       await loadSlots();
       showToast(`${newSlotsToInsert.length} horários padrão sincronizados com sucesso!`, 'success');
     } catch (err: any) {
-      console.error('Error syncing standard slots:', err);
+
       showToast('Não foi possível sincronizar os horários: ' + err.message, 'error');
     } finally {
       setLoading(false);
@@ -251,7 +251,7 @@ export default function TrainerAgenda() {
               await loadSlots();
               showToast('Todos os horários livres foram removidos da sua agenda.', 'success');
             } catch (err: any) {
-              console.error('Error clearing unbooked slots:', err);
+
               showToast('Não foi possível limpar os horários: ' + err.message, 'error');
             } finally {
               setLoading(false);
@@ -269,7 +269,7 @@ export default function TrainerAgenda() {
 
   const loadData = async () => {
     if (!isSupabaseConfigured()) {
-      setAppointments(MOCK_APPOINTMENTS);
+      setAppointments([]);
       return;
     }
 
@@ -298,7 +298,7 @@ export default function TrainerAgenda() {
         setAppointments(data);
       }
     } catch (err) {
-      console.error('Error loading agenda:', err);
+
     } finally {
       setLoading(false);
     }
@@ -330,7 +330,7 @@ export default function TrainerAgenda() {
         setSlots(data);
       }
     } catch (err) {
-      console.error('Error loading slots:', err);
+
     }
   };
 
@@ -528,7 +528,7 @@ export default function TrainerAgenda() {
       await loadSlots();
       showToast('Horário livre adicionado com sucesso!', 'success');
     } catch (err: any) {
-      console.error('Error adding slot:', err);
+
       showToast('Não foi possível adicionar o horário: ' + err.message, 'error');
     } finally {
       setLoading(false);
@@ -568,7 +568,7 @@ export default function TrainerAgenda() {
               await loadSlots();
               showToast('Horário livre removido com sucesso!', 'success');
             } catch (err: any) {
-              console.error('Error deleting slot:', err);
+
               showToast('Não foi possível remover o horário.', 'error');
             } finally {
               setLoading(false);

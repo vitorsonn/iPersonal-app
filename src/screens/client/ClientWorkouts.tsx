@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { MOCK_CLIENT } from '../../data/mockData';
+
 import { Card } from '../../components/common/UI';
 import {
   CheckCircle2,
@@ -16,7 +16,7 @@ import {
   Play,
   Dumbbell,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 
 type ClientWorkoutsProps = {
   onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts' | 'ClientWorkoutSuccess', params?: any) => void;
@@ -32,8 +32,8 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
   useEffect(() => {
     async function loadWorkouts() {
       if (!isSupabaseConfigured()) {
-        setWorkouts(MOCK_CLIENT.workouts);
-        setObjective(MOCK_CLIENT.objective);
+        setWorkouts([]);
+        setObjective('');
         return;
       }
 
@@ -80,7 +80,7 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
           setWorkouts(formatted);
         }
       } catch (err) {
-        console.error('Error loading client workouts:', err);
+
       } finally {
         setLoading(false);
       }

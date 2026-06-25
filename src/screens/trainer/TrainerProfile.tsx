@@ -10,9 +10,9 @@ import {
 } from 'react-native';
 import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
-import { MOCK_TRAINER } from '../../data/mockData';
+
 import { Camera, LogOut, Save } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../services/supabase';
+import { supabase, isSupabaseConfigured } from '../../config/supabase';
 
 type TrainerProfileProps = {
   onLogout: () => void;
@@ -20,16 +20,16 @@ type TrainerProfileProps = {
 
 export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
   const [loading, setLoading] = useState(false);
-  const [name, setName] = useState(MOCK_TRAINER.name);
-  const [username, setUsername] = useState(MOCK_TRAINER.username);
-  const [bio, setBio] = useState(MOCK_TRAINER.bio);
-  const [specialties, setSpecialties] = useState(MOCK_TRAINER.specialties.join(', '));
+  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [bio, setBio] = useState('');
+  const [specialties, setSpecialties] = useState([].join(', '));
   const [avatar, setAvatar] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
       if (!isSupabaseConfigured()) {
-        setAvatar(MOCK_TRAINER.avatar);
+        setAvatar('');
         return;
       }
 
@@ -67,7 +67,7 @@ export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
           }
         }
       } catch (err) {
-        console.error('Error loading trainer profile:', err);
+
       } finally {
         setLoading(false);
       }
@@ -115,7 +115,7 @@ export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
 
       Alert.alert('Sucesso', 'Alterações salvas com sucesso!');
     } catch (err: any) {
-      console.error('Error saving trainer profile:', err);
+
       Alert.alert('Erro', 'Não foi possível salvar as alterações: ' + err.message);
     } finally {
       setLoading(false);
@@ -172,7 +172,7 @@ export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
             <Label>Link Personalizado (@usuario)</Label>
             <View className="flex-row">
               <View className="h-14 items-center justify-center px-4 rounded-l-2xl border border-zinc-800 bg-zinc-900 border-r-0">
-                <Text className="text-zinc-500 text-sm">ipersonal.app/</Text>
+                <Text className="text-zinc-500 text-sm">{(process.env.EXPO_PUBLIC_APP_URL || 'ipersonal.app').replace('https://', '')}/</Text>
               </View>
               <Input
                 className="flex-1 rounded-l-none"
