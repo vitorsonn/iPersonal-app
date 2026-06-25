@@ -254,8 +254,8 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
   }, []);
 
   const copyLink = async () => {
-    await Clipboard.setStringAsync(`ipersonal.app/personal/${trainer.username}`);
-    Alert.alert('Link Copiado', `O link ipersonal.app/personal/${trainer.username} foi copiado para a área de transferência.`);
+    await Clipboard.setStringAsync(`exp://192.168.0.15:8081/--/personal/${trainer.username}`);
+    Alert.alert('Link Copiado', `O link exp://192.168.0.15:8081/--/personal/${trainer.username} foi copiado para a área de transferência.`);
   };
 
   if (loading) {
@@ -320,7 +320,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
             <View className="flex-row items-center gap-2">
               <View className="bg-zinc-950/10 px-3 py-2.5 rounded-xl flex-1 justify-center">
                 <Text className="text-zinc-950 text-sm font-medium" numberOfLines={1}>
-                  ipersonal.app/personal/{trainer.username}
+                  exp://192.168.0.15:8081/--/personal/{trainer.username}
                 </Text>
               </View>
               <Pressable
