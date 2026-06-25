@@ -1,40 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { ChevronLeft, Bell, BellDot, Check } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import { getUserNotifications, markAsRead, subscribeToNotifications, Notification } from '../../services/notificationService';
 import { Card } from '../../components/common/UI';
+import { useAuth } from '../../hooks/useAuth';
 
 interface NotificationsScreenProps {
   onGoBack: () => void;
 }
 
 export default function NotificationsScreen({ onGoBack }: NotificationsScreenProps) {
+  const { user, loading: authLoading } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
 
   useEffect(() => {
     let activeChannel: any = null;
 
     const fetchNotifications = async () => {
-      if (!isSupabaseConfigured()) {
-        setLoading(false);
-        return;
-      }
+      if (!user) return;
       try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const data = await getUserNotifications(user.id);
+        setDataLoading(true);
+        const data = await getUserNotifications(user.id);
           setNotifications(data);
           
           activeChannel = subscribeToNotifications(user.id, async () => {
             const newData = await getUserNotifications(user.id);
             setNotifications(newData);
           });
-        }
       } catch (err) {
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     };
 
@@ -45,10 +42,10 @@ export default function NotificationsScreen({ onGoBack }: NotificationsScreenPro
         supabase.removeChannel(activeChannel);
       }
     };
-  }, []);
+  }, [user]);
 
   const handleNotificationPress = async (notification: Notification) => {
-    if (!notification.read && isSupabaseConfigured()) {
+    if (!notification.read) {
       try {
         await markAsRead(notification.id);
         setNotifications((prev) =>
@@ -70,7 +67,7 @@ export default function NotificationsScreen({ onGoBack }: NotificationsScreenPro
     return `${d.toLocaleDateString('pt-BR')} às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return (
       <View className="flex-1 bg-zinc-950 items-center justify-center">
         <ActivityIndicator size="large" color="#a3e635" />

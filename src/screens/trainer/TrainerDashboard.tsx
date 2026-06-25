@@ -19,17 +19,20 @@ import {
   Share2,
   Users,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
 import { getUserNotifications, subscribeToNotifications, Notification } from '../../services/notificationService';
 import { Bell } from 'lucide-react-native';
+import { useAuth } from '../../hooks/useAuth';
+import { isTodayStr, parseDateFromString } from '../../utils/dateUtils';
 
 type TrainerDashboardProps = {
   onNavigate: (screen: 'TrainerAssignWorkout' | 'TrainerAgenda' | 'TrainerAppointments' | 'Notifications', params?: any) => void;
 };
 
 export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) {
-  const [loading, setLoading] = useState(false);
+  const { user, profile: authProfile, loading: authLoading } = useAuth();
+  const [dataLoading, setDataLoading] = useState(false);
   const [trainer, setTrainer] = useState({
     name: '',
     avatar: '',
@@ -42,62 +45,42 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
+    if (!user) return;
+    
     async function loadData() {
-      if (!isSupabaseConfigured()) {
-        const mockToday = [].filter(a => a.date === 'Hoje');
-        setTodayAppointments(mockToday);
-        setAulasHojeCount(mockToday.length);
-        return;
-      }
-
       try {
-        setLoading(true);
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) {
-          const mockToday = [].filter(a => a.date === 'Hoje');
-          setTodayAppointments(mockToday);
-          setAulasHojeCount(mockToday.length);
-          return;
-        }
+        setDataLoading(true);
 
-        const notifs = await getUserNotifications(user.id);
+        const notifs = await getUserNotifications(user!.id);
         setNotifications(notifs.slice(0, 5));
         setUnreadCount(notifs.filter(n => !n.read).length);
-
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('name, avatar_url')
-          .eq('id', user.id)
-          .single();
 
         const { data: trainerData } = await supabase
           .from('trainers')
           .select('username')
-          .eq('profile_id', user.id)
+          .eq('profile_id', user!.id)
           .single();
 
-        if (profile) {
-          setTrainer({
-            name: profile.name || '',
-            avatar: profile.avatar_url || null,
-            username: trainerData?.username || '',
-          });
-        }
+        setTrainer({
+          name: authProfile?.name || '',
+          avatar: authProfile?.avatar_url || null,
+          username: trainerData?.username || '',
+        });
 
         const { data: workouts } = await supabase
           .from('workouts')
           .select('student_id')
-          .eq('trainer_id', user.id);
+          .eq('trainer_id', user!.id);
 
         const { data: appointments } = await supabase
           .from('appointments')
           .select('student_id')
-          .eq('trainer_id', user.id);
+          .eq('trainer_id', user!.id);
 
         const { data: linkedStudents } = await supabase
           .from('students')
           .select('profile_id')
-          .eq('trainer_id', user.id);
+          .eq('trainer_id', user!.id);
 
         const studentIds = new Set([
           ...(workouts || []).map(w => w.student_id),
@@ -120,43 +103,20 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
               )
             )
           `)
-          .eq('trainer_id', user.id);
+          .eq('trainer_id', user!.id);
 
         if (apptsData) {
           const today = new Date();
           today.setHours(0, 0, 0, 0);
 
           // 1. Calculate count for "Aulas Hoje"
-          const todayAppointmentsFiltered = apptsData.filter((apt: any) => {
-            if (apt.date === 'Hoje') return true;
-            if (apt.date === 'Amanhã') return false;
-            const parts = apt.date.split('-');
-            if (parts.length === 3) {
-              const aptDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-              aptDate.setHours(0, 0, 0, 0);
-              return aptDate.getTime() === today.getTime();
-            }
-            return false;
-          });
+          const todayAppointmentsFiltered = apptsData.filter((apt: any) => isTodayStr(apt.date));
           setAulasHojeCount(todayAppointmentsFiltered.length);
 
           // 2. Format and sort upcoming appointments
           const formatted = apptsData
             .map((apt: any) => {
-              let aptDate: Date;
-              if (apt.date === 'Hoje') {
-                aptDate = new Date();
-              } else if (apt.date === 'Amanhã') {
-                aptDate = new Date();
-                aptDate.setDate(aptDate.getDate() + 1);
-              } else {
-                const parts = apt.date.split('-');
-                if (parts.length === 3) {
-                  aptDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-                } else {
-                  aptDate = new Date(apt.date);
-                }
-              }
+              const aptDate = parseDateFromString(apt.date, apt.time);
               aptDate.setHours(0, 0, 0, 0);
 
               // Pretty print date for render
@@ -195,7 +155,7 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
       } catch (err) {
 
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     }
 
@@ -207,29 +167,26 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
     let notifsChannel: any = null;
 
     async function setupRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
+      activeChannel = subscribeToAppointments('trainer_id', user!.id, () => {
         loadData();
       });
 
       workoutsChannel = supabase
-        .channel(`trainer-workouts-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user.id}` }, () => {
+        .channel(`trainer-workouts-${user!.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `trainer_id=eq.${user!.id}` }, () => {
           loadData();
         })
         .subscribe();
 
       studentsChannel = supabase
-        .channel(`trainer-students-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user.id}` }, () => {
+        .channel(`trainer-students-${user!.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'students', filter: `trainer_id=eq.${user!.id}` }, () => {
           loadData();
         })
         .subscribe();
 
-      notifsChannel = subscribeToNotifications(user.id, async () => {
-        const notifs = await getUserNotifications(user.id);
+      notifsChannel = subscribeToNotifications(user!.id, async () => {
+        const notifs = await getUserNotifications(user!.id);
         setNotifications(notifs.slice(0, 5));
         setUnreadCount(notifs.filter(n => !n.read).length);
       });
@@ -251,14 +208,14 @@ export default function TrainerDashboard({ onNavigate }: TrainerDashboardProps) 
         supabase.removeChannel(notifsChannel);
       }
     };
-  }, []);
+  }, [user, authProfile]);
 
   const copyLink = async () => {
     await Clipboard.setStringAsync(`exp://192.168.0.15:8081/--/personal/${trainer.username}`);
     Alert.alert('Link Copiado', `O link exp://192.168.0.15:8081/--/personal/${trainer.username} foi copiado para a área de transferência.`);
   };
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return (
       <View className="flex-1 bg-zinc-950 items-center justify-center">
         <ActivityIndicator size="large" color="#a3e635" />

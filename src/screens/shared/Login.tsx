@@ -25,23 +25,14 @@ type LoginProps = {
   pendingTrainerUsername?: string | null;
 };
 
-const credentialsByRole: Record<AuthRole, { email: string; password: string }> = {
-  trainer: {
-    email: 'carlos@ipersonal.app',
-    password: 'password123',
-  },
-  student: {
-    email: 'ana@email.com',
-    password: 'password123',
-  },
-};
+
 
 export default function Login({ onForgotPassword, onLogin, onRegister, pendingTrainerUsername }: LoginProps) {
   const [role, setRole] = useState<AuthRole>('trainer');
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
-  const [email, setEmail] = useState(credentialsByRole.trainer.email);
-  const [password, setPassword] = useState(credentialsByRole.trainer.password);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const copy = useMemo(
     () =>
@@ -59,10 +50,7 @@ export default function Login({ onForgotPassword, onLogin, onRegister, pendingTr
 
   const handleRoleChange = (newRole: AuthRole) => {
     setRole(newRole);
-    if (!isRegistering) {
-      setEmail(credentialsByRole[newRole].email);
-      setPassword(credentialsByRole[newRole].password);
-    } else {
+    if (isRegistering) {
       setEmail('');
       setPassword('');
     }
@@ -155,10 +143,7 @@ export default function Login({ onForgotPassword, onLogin, onRegister, pendingTr
             <Pressable onPress={() => {
               setIsRegistering(!isRegistering);
               setName('');
-              if (!isRegistering) {
-                setEmail(credentialsByRole[role].email);
-                setPassword(credentialsByRole[role].password);
-              } else {
+              if (isRegistering) {
                 setEmail('');
                 setPassword('');
               }

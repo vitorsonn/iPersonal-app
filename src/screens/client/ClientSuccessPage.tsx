@@ -3,6 +3,7 @@ import {
   Pressable,
   Text,
   View,
+  Image,
 } from 'react-native';
 import { Card } from '../../components/common/UI';
 
@@ -19,7 +20,10 @@ type ClientSuccessPageProps = {
 };
 
 export default function ClientSuccessPage({ username, onFinish }: ClientSuccessPageProps) {
-  const trainer: any = {};
+  const trainer: any = {
+    name: username || 'Carlos Silva',
+    avatar: 'https://i.pravatar.cc/150?u=carlos'
+  };
 
   return (
     <View className="flex-1 bg-zinc-950 items-center justify-center p-6">
@@ -82,7 +86,7 @@ export default function ClientSuccessPage({ username, onFinish }: ClientSuccessP
 }
 
 // Simple internal helper to render image
-import { Image } from 'react-native';
 function AvatarImage({ src }: { src: string }) {
+  if (!src) return null;
   return <Image source={{ uri: src }} className="w-full h-full" />;
 }

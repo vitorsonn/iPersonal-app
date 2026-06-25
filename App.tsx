@@ -12,7 +12,7 @@ import ClientSuccessPage from './src/screens/client/ClientSuccessPage';
 import ClientWorkoutSuccessPage from './src/screens/client/ClientWorkoutSuccessPage';
 import NotificationsScreen from './src/screens/shared/NotificationsScreen';
 import { AuthRole } from './src/components/auth/AuthUI';
-import { supabase, isSupabaseConfigured } from './src/config/supabase';
+import { supabase } from './src/config/supabase';
 import { ToastProvider } from './src/components/common/Toast';
 
 type TabType = 'dashboard' | 'agenda' | 'appointments' | 'profile';
@@ -115,7 +115,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+
 
     // Fetch initial session on startup
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -139,7 +139,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) return;
+
 
     const subscription = Linking.addEventListener('url', (event) => {
       parseAndApplyUrl(event.url, session);
@@ -186,44 +186,17 @@ export default function App() {
   };
 
   const handleLogin = async (email: string, password: string, role: AuthRole) => {
-    if (isSupabaseConfigured()) {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      if (error) {
-        Alert.alert('Erro de Login', error.message);
-      }
-    } else {
-      // Mock Fallback
-      if (role === 'trainer') {
-        setScreen({ name: 'TrainerMain', tab: 'dashboard' });
-      } else {
-        setScreen({ name: 'ClientMain', tab: 'dashboard' });
-      }
+    if (error) {
+      Alert.alert('Erro de Login', error.message);
     }
   };
 
   const handleRegister = async (name: string, email: string, password: string, role: AuthRole) => {
-    if (!isSupabaseConfigured()) {
-      Alert.alert(
-        'Cadastro (Modo Demo)',
-        `Conta criada no modo de demonstração offline!\nNome: ${name}\nCargo: ${role === 'trainer' ? 'Personal' : 'Aluno'}`,
-        [{
-          text: 'Entrar',
-          onPress: () => {
-            if (role === 'trainer') {
-              setScreen({ name: 'TrainerMain', tab: 'dashboard' });
-            } else {
-              setScreen({ name: 'ClientMain', tab: 'dashboard' });
-            }
-          }
-        }]
-      );
-      return;
-    }
-
     try {
       // 1. Sign up user in Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -367,11 +340,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    if (isSupabaseConfigured()) {
-      supabase.auth.signOut();
-    } else {
-      setScreen({ name: 'Login' });
-    }
+    supabase.auth.signOut();
   };
 
   // Render Screens

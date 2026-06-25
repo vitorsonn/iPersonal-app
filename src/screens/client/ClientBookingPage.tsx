@@ -18,46 +18,11 @@ import {
   Clock,
   Star,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import { rescheduleAppointment } from '../../services/appointments';
+import { getFriendlyDate, formatTime } from '../../utils/dateUtils';
+import { useAuth } from '../../hooks/useAuth';
 
-const getFriendlyDate = (dateStr: string) => {
-  if (!dateStr) return '';
-  try {
-    const parts = dateStr.split('-');
-    if (parts.length !== 3) return dateStr;
-    const year = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const day = parseInt(parts[2], 10);
-    
-    const date = new Date(year, month, day);
-    const today = new Date();
-    const tomorrow = new Date();
-    tomorrow.setDate(today.getDate() + 1);
-    
-    const isToday = today.getFullYear() === date.getFullYear() && today.getMonth() === date.getMonth() && today.getDate() === date.getDate();
-    const isTomorrow = tomorrow.getFullYear() === date.getFullYear() && tomorrow.getMonth() === date.getMonth() && tomorrow.getDate() === date.getDate();
-    
-    const weekdays = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-    const weekdayName = weekdays[date.getDay()];
-    const formattedDate = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}`;
-    
-    if (isToday) return `Hoje (${formattedDate})`;
-    if (isTomorrow) return `Amanhã (${formattedDate})`;
-    return `${weekdayName}, ${formattedDate}`;
-  } catch (e) {
-    return dateStr;
-  }
-};
-
-const formatTime = (timeStr: string) => {
-  if (!timeStr) return '';
-  const parts = timeStr.split(':');
-  if (parts.length >= 2) {
-    return `${parts[0]}:${parts[1]}`;
-  }
-  return timeStr;
-};
 
 type ClientBookingPageProps = {
   username?: string;
@@ -67,6 +32,7 @@ type ClientBookingPageProps = {
 };
 
 export default function ClientBookingPage({ username, appointmentId, onNavigate, onGoBack }: ClientBookingPageProps) {
+  const { user } = useAuth();
   const isReschedule = !!appointmentId;
   const [loading, setLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -90,7 +56,7 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
 
   useEffect(() => {
     async function loadTrainer() {
-      if (!isSupabaseConfigured() || !username) {
+      if (!username) {
         return;
       }
 
@@ -185,28 +151,12 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
     if (!selectedSlotData || !appointmentId) return;
 
     try {
-      if (isSupabaseConfigured()) {
-        await rescheduleAppointment(
-          appointmentId,
-          selectedSlotData.date,
-          selectedSlotData.time,
-          selectedSlotData.id,
-        );
-      } else {
-        // Mock mode: update existing appointment in-place (no duplication)
-        const mockApt = [].find((a: any) => a.id === appointmentId);
-        if (mockApt) {
-          mockApt.date = selectedSlotData.date;
-          mockApt.time = selectedSlotData.time;
-          mockApt.status = 'pending';
-        }
-        const mockClass = [].find((c: any) => c.id === appointmentId);
-        if (mockClass) {
-          mockClass.date = selectedSlotData.date;
-          mockClass.time = selectedSlotData.time;
-          mockClass.status = 'pending';
-        }
-      }
+      await rescheduleAppointment(
+        appointmentId,
+        selectedSlotData.date,
+        selectedSlotData.time,
+        selectedSlotData.id,
+      );
       onNavigate('ClientSuccess', { username });
     } catch (err: any) {
 
@@ -220,9 +170,8 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
       return;
     }
 
-    if (isSupabaseConfigured() && selectedSlotData) {
+    if (selectedSlotData) {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           Alert.alert('Erro', 'Você precisa estar logado para agendar.');
           return;
@@ -295,39 +244,6 @@ export default function ClientBookingPage({ username, appointmentId, onNavigate,
         Alert.alert('Erro', 'Houve um erro ao salvar o agendamento no servidor: ' + err.message);
         return;
       }
-    } else if (selectedSlotData) {
-      // Offline/Mock mode
-      const newAptId = `mock-a-${Date.now()}`;
-      
-      // Remove old pending/scheduled appointments from mock lists
-      const oldAptsIdxs = [].map((a, i) => 
-        (a.clientName === '' && (a.status === 'pending' || a.status === 'scheduled' || a.status === 'PENDENTE')) ? i : -1
-      ).filter(i => i !== -1);
-      
-      for (let i = oldAptsIdxs.length - 1; i >= 0; i--) {
-        [].splice(oldAptsIdxs[i], 1);
-      }
-
-      [] = [].filter(c => 
-        c.status !== 'pending' && c.status !== 'scheduled' && c.status !== 'PENDENTE'
-      );
-
-      [].push({
-        id: newAptId,
-        clientName: '',
-        date: selectedSlotData.date,
-        time: selectedSlotData.time,
-        status: 'pending',
-        objective: objective,
-      });
-
-      [].unshift({
-        id: newAptId,
-        date: selectedSlotData.date,
-        time: selectedSlotData.time,
-        status: 'pending',
-        trainerName: trainer.name,
-      });
     }
 
     onNavigate('ClientSuccess', { username });

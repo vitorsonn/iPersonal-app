@@ -7,7 +7,7 @@ import {
   View,
   ActivityIndicator,
 } from 'react-native';
-import { Card, Input } from '../../components/common/UI';
+import { Card } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 
 import {
@@ -16,9 +16,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Clock,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 const WORKOUT_TEMPLATES = [
   { id: 't1', name: 'Treino A - Peito e Tríceps', type: 'Hipertrofia', duration: '45 min', color: 'bg-blue-500/10 text-blue-400' },
@@ -74,6 +74,7 @@ type TrainerAssignWorkoutProps = {
 };
 
 export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: TrainerAssignWorkoutProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [studentsList, setStudentsList] = useState<any[]>([]);
@@ -146,18 +147,10 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
 
   useEffect(() => {
     async function loadStudents() {
-      if (!isSupabaseConfigured()) {
-        setStudentsList([]);
-        const initialStudent = [].find(s => s.id === studentId);
-        if (initialStudent) {
-          setSelectedStudent(initialStudent);
-        }
-        return;
-      }
+
 
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
         const { data, error } = await supabase
@@ -202,96 +195,18 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
       }
     }
 
-    loadStudents();
-  }, [studentId]);
+    if (user) {
+      loadStudents();
+    }
+  }, [studentId, user]);
 
   const handleFinish = async () => {
     if (!selectedStudent || !selectedTemplate) return;
 
-    if (!isSupabaseConfigured()) {
-      const dateStr = `${selectedClassDate.getFullYear()}-${String(selectedClassDate.getMonth() + 1).padStart(2, '0')}-${String(selectedClassDate.getDate()).padStart(2, '0')}`;
-      const timeStr = selectedClassTime;
 
-      // Check if the selected date is today/tomorrow for friendly display name
-      const today = new Date();
-      let displayDate = dateStr;
-      if (
-        selectedClassDate.getFullYear() === today.getFullYear() &&
-        selectedClassDate.getMonth() === today.getMonth() &&
-        selectedClassDate.getDate() === today.getDate()
-      ) {
-        displayDate = 'Hoje';
-      } else {
-        const tomorrow = new Date();
-        tomorrow.setDate(today.getDate() + 1);
-        if (
-          selectedClassDate.getFullYear() === tomorrow.getFullYear() &&
-          selectedClassDate.getMonth() === tomorrow.getMonth() &&
-          selectedClassDate.getDate() === tomorrow.getDate()
-        ) {
-          displayDate = 'Amanhã';
-        }
-      }
-
-      // Create new appointment in []
-      const newAptId = `mock-a-${Date.now()}`;
-      [].push({
-        id: newAptId,
-        clientName: selectedStudent.name,
-        date: displayDate,
-        time: timeStr,
-        status: 'scheduled',
-        objective: selectedStudent.objective || 'Treino',
-      });
-
-      // Update mock student's next class description
-      const mockStudent = [].find(s => s.id === selectedStudent.id);
-      if (mockStudent) {
-        mockStudent.nextClass = `${displayDate}, ${timeStr}`;
-      }
-
-      // If the selected student matches the mock client, add it to client's dashboard upcomingClasses and workouts list
-      if (selectedStudent.name === '') {
-        [].unshift({
-          id: newAptId,
-          date: displayDate,
-          time: timeStr,
-          status: 'scheduled',
-          trainerName: 'Carlos Silva',
-        });
-
-        // Add to client's workouts
-        const newWId = `mock-w-${Date.now()}`;
-        const templateExercises = getExercisesForTemplate(selectedTemplate.id);
-        [].unshift({
-          id: newWId,
-          title: selectedTemplate.name,
-          duration: selectedTemplate.duration,
-          level: 'Intermediário',
-          exercises: templateExercises.map(ex => ({
-            name: ex.name,
-            sets: ex.sets,
-            reps: ex.reps
-          }))
-        });
-      }
-
-      Alert.alert(
-        'Treino Atribuído! 🎉',
-        `Treino "${selectedTemplate.name}" atribuído com sucesso para ${selectedStudent.name}!`,
-        [
-          {
-            text: 'Ok',
-            onPress: onFinish,
-          },
-        ]
-      );
-      return;
-    }
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         Alert.alert('Erro', 'Não foi possível encontrar o usuário autenticado.');
         return;
@@ -343,7 +258,8 @@ export default function TrainerAssignWorkout({ studentId, onFinish, onGoBack }: 
         });
 
       if (aptError) {
-
+        Alert.alert('Erro', 'Não foi possível agendar o treino.');
+        return;
       }
 
       Alert.alert(

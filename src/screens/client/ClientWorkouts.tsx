@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Alert,
   Pressable,
   ScrollView,
   Text,
@@ -16,31 +15,27 @@ import {
   Play,
   Dumbbell,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 type ClientWorkoutsProps = {
   onNavigate: (screen: 'ClientBooking' | 'ClientSuccess' | 'ClientWorkouts' | 'ClientWorkoutSuccess', params?: any) => void;
 };
 
 export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
+  const { user, loading: authLoading } = useAuth();
+  const [dataLoading, setDataLoading] = useState(false);
   const [workouts, setWorkouts] = useState<any[]>([]);
   const [objective, setObjective] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const [activeWorkout, setActiveWorkout] = useState<string | null>(null);
   const [completedExercises, setCompletedExercises] = useState<Set<number>>(new Set());
 
   useEffect(() => {
+    if (!user) return;
+    
     async function loadWorkouts() {
-      if (!isSupabaseConfigured()) {
-        setWorkouts([]);
-        setObjective('');
-        return;
-      }
-
       try {
-        setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
+        setDataLoading(true);
 
         // Fetch student objective
         const { data: studentData } = await supabase
@@ -82,7 +77,7 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
       } catch (err) {
 
       } finally {
-        setLoading(false);
+        setDataLoading(false);
       }
     }
 
@@ -91,12 +86,9 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
     let activeChannel: any = null;
 
     async function setupRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       activeChannel = supabase
-        .channel(`client-workouts-${user.id}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `student_id=eq.${user.id}` }, () => {
+        .channel(`client-workouts-${user!.id}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'workouts', filter: `student_id=eq.${user!.id}` }, () => {
           loadWorkouts();
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'exercises' }, () => {
@@ -112,7 +104,7 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
         supabase.removeChannel(activeChannel);
       }
     };
-  }, []);
+  }, [user]);
 
   const handleStart = (id: string) => {
     setActiveWorkout(id);
@@ -236,7 +228,7 @@ export default function ClientWorkouts({ onNavigate }: ClientWorkoutsProps) {
     );
   }
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return (
       <View className="flex-1 bg-zinc-950 items-center justify-center">
         <ActivityIndicator size="large" color="#a3e635" />

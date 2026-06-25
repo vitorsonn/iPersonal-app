@@ -19,8 +19,9 @@ import {
   Search,
   XCircle,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
+import { useAuth } from '../../hooks/useAuth';
 
 const objectiveColors: Record<string, string> = {
   'Hipertrofia': 'bg-blue-500/15 text-blue-400',
@@ -34,6 +35,7 @@ type TrainerAppointmentsProps = {
 };
 
 export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsProps) {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'students' | 'appointments'>('students');
   const [search, setSearch] = useState('');
@@ -42,15 +44,10 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
   const [appointments, setAppointments] = useState<any[]>([]);
 
   const loadData = async () => {
-    if (!isSupabaseConfigured()) {
-      setStudents([]);
-      setAppointments([]);
-      return;
-    }
+
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       // 1. Fetch appointments
@@ -202,14 +199,13 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
   useEffect(() => {
     loadData();
 
-    if (!isSupabaseConfigured()) return;
+
 
     let activeChannel: any = null;
     let workoutsChannel: any = null;
     let studentsChannel: any = null;
 
     async function setupRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
@@ -244,18 +240,10 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
         supabase.removeChannel(studentsChannel);
       }
     };
-  }, []);
+  }, [user]);
 
   const handleAcceptAppointment = async (aptId: string, clientName: string) => {
-    if (!isSupabaseConfigured()) {
-      const idx = [].findIndex(a => a.id === aptId);
-      if (idx !== -1) {
-        (appointments as any)[idx].status = 'scheduled';
-      }
-      Alert.alert('Sucesso', `Agendamento de ${clientName} aceito!`);
-      loadData();
-      return;
-    }
+
 
     try {
       const { error } = await supabase
@@ -272,15 +260,7 @@ export default function TrainerAppointments({ onNavigate }: TrainerAppointmentsP
   };
 
   const handleDeclineAppointment = async (aptId: string, clientName: string) => {
-    if (!isSupabaseConfigured()) {
-      const idx = [].findIndex(a => a.id === aptId);
-      if (idx !== -1) {
-        [].splice(idx, 1);
-      }
-      Alert.alert('Recusado', `Agendamento de ${clientName} recusado.`);
-      loadData();
-      return;
-    }
+
 
     try {
       const { error } = await supabase

@@ -12,52 +12,43 @@ import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 
 import { Camera, LogOut, Save } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 type TrainerProfileProps = {
   onLogout: () => void;
 };
 
 export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
+  const { user, profile: authProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [bio, setBio] = useState('');
-  const [specialties, setSpecialties] = useState([].join(', '));
+  const [specialties, setSpecialties] = useState('');
   const [avatar, setAvatar] = useState<string | null>(null);
 
   useEffect(() => {
+    if (authProfile) {
+      setName(authProfile.name || '');
+      setAvatar(authProfile.avatar_url || null);
+    }
+  }, [authProfile]);
+
+  useEffect(() => {
     async function loadProfile() {
-      if (!isSupabaseConfigured()) {
-        setAvatar('');
-        return;
-      }
+
 
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
 
-        // 1. Fetch profile details
-        const { data: profileData, error: profileErr } = await supabase
-          .from('profiles')
-          .select('name, avatar_url')
-          .eq('id', user.id)
-          .single();
-
-        if (profileErr) throw profileErr;
-
-        // 2. Fetch trainer details
+        // Fetch trainer details
         const { data: trainerData, error: trainerErr } = await supabase
           .from('trainers')
           .select('username, bio, specialties')
           .eq('profile_id', user.id)
           .single();
-
-        if (profileData) {
-          setName(profileData.name || '');
-          setAvatar(profileData.avatar_url || null);
-        }
 
         if (trainerData) {
           setUsername(trainerData.username || '');
@@ -73,18 +64,16 @@ export default function TrainerProfile({ onLogout }: TrainerProfileProps) {
       }
     }
 
-    loadProfile();
-  }, []);
+    if (user) {
+      loadProfile();
+    }
+  }, [user]);
 
   const handleSave = async () => {
-    if (!isSupabaseConfigured()) {
-      Alert.alert('Sucesso', 'Alterações salvas com sucesso!');
-      return;
-    }
+
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         Alert.alert('Erro', 'Não foi possível encontrar o usuário autenticado.');
         return;

@@ -183,11 +183,3 @@ export function GlowingButton({
   );
 }
 
-type AvatarProps = {
-  className?: string;
-  source: string;
-};
-
-export function Avatar({ className, source }: AvatarProps) {
-  return <Image className={cn('h-12 w-12 rounded-full border-2 border-zinc-800 bg-zinc-800', className)} source={{ uri: source }} />;
-}

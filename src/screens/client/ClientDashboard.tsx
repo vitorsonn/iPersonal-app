@@ -16,11 +16,10 @@ import {
   Flame,
   Play,
   Target,
-  CheckCircle2,
   Clock,
   Bell,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import {
   getNextAppointment,
   checkInAppointment,
@@ -29,6 +28,8 @@ import {
   markAsCompleted,
 } from '../../services/appointments';
 import { getUserNotifications, subscribeToNotifications, Notification } from '../../services/notificationService';
+import { useAuth } from '../../hooks/useAuth';
+import { parseDateFromString } from '../../utils/dateUtils';
 
 const sanitizeStatus = (status: string): string => {
   const s = (status || '').toUpperCase();
@@ -45,10 +46,10 @@ type ClientDashboardProps = {
 };
 
 export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
+  const { user, profile: authProfile, loading: authLoading } = useAuth();
+  const [dataLoading, setDataLoading] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const [loading, setLoading] = useState(false);
   const [client, setClient] = useState({
     name: '',
     avatar: '',
@@ -67,28 +68,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       return { available: false, label: status === 'confirmed' ? 'Confirmada' : status === 'pending' ? 'Pendente' : 'No-Show' };
     }
 
-    let classDate = new Date();
-    if (dateStr === 'Hoje' || dateStr.toLowerCase().includes('hoje')) {
-      // keeps today's date
-    } else if (dateStr === 'Amanhã' || dateStr.toLowerCase().includes('amanhã')) {
-      classDate.setDate(classDate.getDate() + 1);
-    } else {
-      const cleanDate = dateStr.trim();
-      if (cleanDate.includes('/')) {
-        const parts = cleanDate.split('/');
-        if (parts.length === 3) {
-          classDate = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-        }
-      } else if (cleanDate.includes('-')) {
-        const parts = cleanDate.split('-');
-        if (parts.length === 3) {
-          classDate = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-        }
-      }
-    }
-
-    const timeParts = timeStr.split(':');
-    classDate.setHours(parseInt(timeParts[0], 10), parseInt(timeParts[1], 10), 0, 0);
+    const classDate = parseDateFromString(dateStr, timeStr);
 
     const now = new Date();
     const diffMs = classDate.getTime() - now.getTime();
@@ -102,8 +82,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
   };
 
   const handleAutoNoShow = async (aptId: string) => {
-    if (isSupabaseConfigured()) {
-      try {
+    try {
         const { data: apt } = await supabase
           .from('appointments')
           .select('trainer_id, date, time')
@@ -126,8 +105,6 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
       } catch (err) {
 
       }
-    }
-    
     setClient(prev => ({
       ...prev,
       upcomingClasses: prev.upcomingClasses.map(c => 
@@ -138,9 +115,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
 
   const handleConfirmCheckIn = async (aptId: string) => {
     try {
-      if (isSupabaseConfigured()) {
-        await checkInAppointment(aptId);
-      }
+      await checkInAppointment(aptId);
       Alert.alert('Sucesso 🎉', 'Seu check-in foi realizado com sucesso! Presença confirmada.');
       await loadData();
     } catch (err) {
@@ -151,9 +126,7 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
 
   const handleFinishWorkout = async (aptId: string) => {
     try {
-      if (isSupabaseConfigured()) {
-        await markAsCompleted(aptId);
-      }
+      await markAsCompleted(aptId);
       onNavigate('ClientWorkoutSuccess');
     } catch (err: any) {
       if (err?.message === 'TOO_EARLY') {
@@ -183,12 +156,9 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
   }, [client.upcomingClasses]);
 
   async function loadData() {
-    if (!isSupabaseConfigured()) return;
-
     try {
-      setLoading(true);
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
+      setDataLoading(true);
+      if (!user) return;
 
       const { data: studentData, error: studentError } = await supabase
         .from('students')
@@ -337,11 +307,12 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
     } catch (err) {
 
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
   }
 
   useEffect(() => {
+    if (!user) return;
     loadData();
 
     let activeChannel: any = null;
@@ -350,7 +321,6 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
     let notifsChannel: any = null;
 
     async function setupRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       activeChannel = subscribeToAppointments('student_id', user.id, () => {
@@ -394,46 +364,20 @@ export default function ClientDashboard({ onNavigate }: ClientDashboardProps) {
         supabase.removeChannel(notifsChannel);
       }
     };
-  }, []);
+  }, [user, authProfile]);
 
   const { upcomingClasses, trainer, streak, workoutsCompleted, workouts } = client;
   
   // Sort classes dynamically for both mock and DB configurations
   const sortedUpcomingClasses = [...upcomingClasses].sort((a, b) => {
-    const parseMockDate = (dateStr: string, timeStr: string) => {
-      let d = new Date();
-      if (!dateStr) return d;
-      if (dateStr.toLowerCase().includes('hoje') || dateStr === 'Hoje') {
-        // today
-      } else if (dateStr.toLowerCase().includes('amanhã') || dateStr === 'Amanhã') {
-        d.setDate(d.getDate() + 1);
-      } else {
-        const clean = dateStr.trim();
-        if (clean.includes('/')) {
-          const parts = clean.split('/');
-          if (parts.length === 3) {
-            d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-          }
-        } else if (clean.includes('-')) {
-          const parts = clean.split('-');
-          if (parts.length === 3) {
-            d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
-          }
-        }
-      }
-      const tParts = timeStr.split(':');
-      d.setHours(parseInt(tParts[0], 10), parseInt(tParts[1], 10), 0, 0);
-      return d;
-    };
-
-    const dateA = parseMockDate(a.date, a.time);
-    const dateB = parseMockDate(b.date, b.time);
+    const dateA = parseDateFromString(a.date, a.time);
+    const dateB = parseDateFromString(b.date, b.time);
     return dateA.getTime() - dateB.getTime();
   });
 
   const nextClass = sortedUpcomingClasses[0];
 
-  if (loading) {
+  if (authLoading || dataLoading) {
     return (
       <View className="flex-1 bg-zinc-950 items-center justify-center">
         <ActivityIndicator size="large" color="#a3e635" />

@@ -11,13 +11,15 @@ import {
 import { Avatar, Card, Input, Label } from '../../components/common/UI';
 import { GlowingButton } from '../../components/auth/AuthUI';
 import { HeartPulse, LogOut, Ruler, Settings } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
+import { useAuth } from '../../hooks/useAuth';
 
 type ClientProfileProps = {
   onLogout: () => void;
 };
 
 export default function ClientProfile({ onLogout }: ClientProfileProps) {
+  const { user, profile: authProfile } = useAuth();
   const [loading, setLoading] = useState(false);
   const [name, setName] = useState('');
   const [objective, setObjective] = useState('');
@@ -26,25 +28,18 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
   const [height, setHeight] = useState('');
 
   useEffect(() => {
+    if (authProfile) {
+      setName(authProfile.name || '');
+      setAvatar(authProfile.avatar_url || null);
+    }
+  }, [authProfile]);
+
+  useEffect(() => {
     async function loadProfile() {
-      if (!isSupabaseConfigured()) {
-        setName('');
-        setObjective('');
-        setAvatar('');
-        setWeight('68');
-        setHeight('1.65');
-        return;
-      }
+
       try {
         setLoading(true);
-        const { data: { user } } = await supabase.auth.getUser();
         if (!user) return;
-
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('name, avatar_url')
-          .eq('id', user.id)
-          .single();
 
         const { data: studentData } = await supabase
           .from('students')
@@ -52,10 +47,6 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
           .eq('profile_id', user.id)
           .single();
 
-        if (profileData) {
-          setName(profileData.name || '');
-          setAvatar(profileData.avatar_url || null);
-        }
         if (studentData) {
           setObjective(studentData.objective || '');
           setWeight(studentData.weight ? String(studentData.weight) : '');
@@ -67,8 +58,10 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
         setLoading(false);
       }
     }
-    loadProfile();
-  }, []);
+    if (user) {
+      loadProfile();
+    }
+  }, [user]);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -76,14 +69,9 @@ export default function ClientProfile({ onLogout }: ClientProfileProps) {
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      Alert.alert('Sucesso (Modo Demo)', 'Perfil atualizado com sucesso!');
-      return;
-    }
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { error: profileErr } = await supabase

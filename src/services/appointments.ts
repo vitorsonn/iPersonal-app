@@ -38,18 +38,7 @@ export function mapStatusFromDb(status: string): AppointmentStatus {
   return 'AGUARDANDO';
 }
 
-/**
- * Maps application uppercase status to database lowercase status.
- */
-export function mapStatusToDb(status: AppointmentStatus | string): string {
-  const s = (status || '').toUpperCase();
-  if (s === 'AGUARDANDO') return 'pending';
-  if (s === 'PENDENTE') return 'scheduled';
-  if (s === 'CHECKED_IN') return 'confirmed';
-  if (s === 'NO_SHOW') return 'no_show';
-  if (s === 'CONCLUIDA') return 'confirmed'; // fallback to confirmed
-  return 'pending';
-}
+
 
 /**
  * Parses appointment date and time strings into a standard Date object.

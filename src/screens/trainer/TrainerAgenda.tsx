@@ -18,11 +18,13 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react-native';
-import { supabase, isSupabaseConfigured } from '../../config/supabase';
+import { supabase } from '../../config/supabase';
 import { subscribeToAppointments } from '../../services/appointments';
 import { useToast } from '../../components/common/Toast';
+import { useAuth } from '../../hooks/useAuth';
 
 export default function TrainerAgenda() {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [appointments, setAppointments] = useState<any[]>([]);
@@ -140,13 +142,7 @@ export default function TrainerAgenda() {
       const today = new Date();
       const newSlotsToInsert: any[] = [];
       
-      let trainerId = 'demo-trainer';
-      if (isSupabaseConfigured()) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          trainerId = user.id;
-        }
-      }
+      let trainerId = user ? user.id : 'demo-trainer';
 
       for (let i = 0; i < 30; i++) {
         const targetDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i);
@@ -190,18 +186,6 @@ export default function TrainerAgenda() {
         return;
       }
 
-      if (!isSupabaseConfigured()) {
-        const updatedSlots = [...slots];
-        newSlotsToInsert.forEach((ns, idx) => {
-          updatedSlots.push({
-            id: `temp-${Date.now()}-${idx}`,
-            ...ns
-          });
-        });
-        setSlots(updatedSlots);
-        showToast(`${newSlotsToInsert.length} horários padrão aplicados localmente!`, 'success');
-        return;
-      }
 
       const { error } = await supabase
         .from('available_slots')
@@ -229,15 +213,9 @@ export default function TrainerAgenda() {
           text: 'Limpar Tudo',
           style: 'destructive',
           onPress: async () => {
-            if (!isSupabaseConfigured()) {
-              setSlots(slots.filter(s => s.is_booked));
-              showToast('Todos os horários livres locais foram removidos.', 'success');
-              return;
-            }
 
             try {
               setLoading(true);
-              const { data: { user } } = await supabase.auth.getUser();
               if (!user) return;
 
               const { error } = await supabase
@@ -268,14 +246,10 @@ export default function TrainerAgenda() {
   }, [selectedDate]);
 
   const loadData = async () => {
-    if (!isSupabaseConfigured()) {
-      setAppointments([]);
-      return;
-    }
+
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data } = await supabase
@@ -305,18 +279,9 @@ export default function TrainerAgenda() {
   };
 
   const loadSlots = async () => {
-    if (!isSupabaseConfigured()) {
-      setSlots([
-        { id: '1', date: '2026-06-15', time: '08:00:00', is_booked: true },
-        { id: '2', date: '2026-06-15', time: '10:00:00', is_booked: false },
-        { id: '3', date: '2026-06-16', time: '14:00:00', is_booked: false },
-        { id: '4', date: '2026-06-16', time: '16:00:00', is_booked: false },
-      ]);
-      return;
-    }
+
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { data, error } = await supabase
@@ -338,13 +303,12 @@ export default function TrainerAgenda() {
     loadData();
     loadSlots();
 
-    if (!isSupabaseConfigured()) return;
+
 
     let activeChannel: any = null;
     let slotsChannel: any = null;
 
     async function setupRealtime() {
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       activeChannel = subscribeToAppointments('trainer_id', user.id, () => {
@@ -369,7 +333,7 @@ export default function TrainerAgenda() {
         supabase.removeChannel(slotsChannel);
       }
     };
-  }, []);
+  }, [user]);
 
   // Helper to determine if dates are the same day
   const isSameDay = (d1: Date, d2: Date) => {
@@ -495,22 +459,10 @@ export default function TrainerAgenda() {
       return;
     }
 
-    if (!isSupabaseConfigured()) {
-      const newId = String(slots.length + 1);
-      setSlots([...slots, {
-        id: newId,
-        date: newSlotDate,
-        time: newSlotTime.trim() + ':00',
-        is_booked: false
-      }]);
-      setNewSlotTime('');
-      showToast('Horário adicionado à lista local.', 'success');
-      return;
-    }
+
 
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
       const { error } = await supabase
@@ -550,11 +502,7 @@ export default function TrainerAgenda() {
           text: 'Remover',
           style: 'destructive',
           onPress: async () => {
-            if (!isSupabaseConfigured()) {
-              setSlots(slots.filter(s => s.id !== slotId));
-              showToast('Horário removido localmente.', 'success');
-              return;
-            }
+
 
             try {
               setLoading(true);
